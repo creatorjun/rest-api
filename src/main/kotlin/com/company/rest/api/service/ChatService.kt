@@ -1,0 +1,340 @@
+package com.company.rest.api.service
+
+import com.company.rest.api.dto.ChatMessageDto
+import com.company.rest.api.dto.MessageReadConfirmationDto
+import com.company.rest.api.dto.MessageReadEventDto
+import com.company.rest.api.dto.MessageType
+import com.company.rest.api.dto.PaginatedChatMessagesResponseDto
+import com.company.rest.api.entity.ChatMessage
+import com.company.rest.api.entity.User
+import com.company.rest.api.repository.ChatMessageRepository
+import com.company.rest.api.repository.UserRepository
+import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable // Pageable 임포트 추가 (searchMessages 파라미터용)
+import org.springframework.data.domain.Slice
+import org.springframework.http.HttpStatus
+import org.springframework.messaging.simp.SimpMessagingTemplate
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+
+@Service
+class ChatService(
+    private val userRepository: UserRepository,
+    private val chatMessageRepository: ChatMessageRepository, //
+    private val messagingTemplate: SimpMessagingTemplate,
+    private val webSocketPresenceService: WebSocketPresenceService, //
+    private val fcmService: FcmService //
+) {
+    private val logger = LoggerFactory.getLogger(ChatService::class.java)
+
+    private val fcmSentForOfflineConversation: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap())
+
+    private fun createCanonicalConversationId(uid1: String, uid2: String): String {
+        return if (uid1 < uid2) "$uid1:$uid2" else "$uid2:$uid1"
+    }
+
+    @Transactional(readOnly = true)
+    fun getPaginatedMessages(
+        currentUserUid: String,
+        otherUserUid: String,
+        beforeTimestamp: Long?,
+        size: Int
+    ): PaginatedChatMessagesResponseDto {
+        // ... (이전 코드와 동일) ...
+        logger.info(
+            "Fetching paginated messages for conversation between {} and {}. Before timestamp: {}, Size: {}",
+            currentUserUid, otherUserUid, beforeTimestamp, size
+        )
+
+        val currentUser = userRepository.findById(currentUserUid)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "현재 사용자를 찾을 수 없습니다: $currentUserUid") }
+        val otherUser = userRepository.findById(otherUserUid)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "대화 상대방 사용자를 찾을 수 없습니다: $otherUserUid") }
+
+        val pageRequest = PageRequest.of(0, size)
+        val messagesSlice: Slice<ChatMessage>
+
+        if (beforeTimestamp != null) {
+            val cursorLocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(beforeTimestamp), ZoneId.systemDefault())
+            logger.debug("Fetching messages before: {}", cursorLocalDateTime)
+            messagesSlice = chatMessageRepository.findMessagesBetweenUsersBefore(
+                currentUser,
+                otherUser,
+                cursorLocalDateTime,
+                pageRequest
+            )
+        } else {
+            logger.debug("Fetching latest messages.")
+            messagesSlice = chatMessageRepository.findLatestMessagesBetweenUsers(
+                currentUser,
+                otherUser,
+                pageRequest
+            )
+        }
+
+        logger.info("Found {} messages. Has next page: {}", messagesSlice.numberOfElements, messagesSlice.hasNext())
+        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice) //
+    }
+
+    // --- 여기부터 새로운 검색 메소드 추가 ---
+    /**
+     * 특정 두 사용자 간의 대화 내용 중, 지정된 키워드를 포함하는 메시지를 검색합니다 (페이징 처리).
+     * @param currentUserUid 현재 요청을 보낸 사용자 UID
+     * @param otherUserUid 대화 상대방 사용자 UID
+     * @param keyword 검색할 키워드
+     * @param pageable 페이지 정보 (예: PageRequest.of(page, size))
+     * @return 페이징 처리된 검색 결과 메시지 목록과 다음 페이지 정보
+     */
+    @Transactional(readOnly = true)
+    fun searchMessages(
+        currentUserUid: String,
+        otherUserUid: String,
+        keyword: String,
+        pageable: Pageable // 컨트롤러에서 Pageable 객체를 받아옴
+    ): PaginatedChatMessagesResponseDto {
+        logger.info(
+            "Searching messages between {} and {} with keyword '{}'. Page: {}, Size: {}",
+            currentUserUid, otherUserUid, keyword, pageable.pageNumber, pageable.pageSize
+        )
+
+        if (keyword.isBlank()) {
+            // 빈 키워드로 검색 요청 시, 빈 결과를 반환하거나 또는 에러 처리
+            // 여기서는 빈 결과를 포함하는 PaginatedChatMessagesResponseDto 반환
+            logger.warn("Search keyword is blank for conversation between {} and {}.", currentUserUid, otherUserUid)
+            return PaginatedChatMessagesResponseDto(emptyList(), false, null)
+        }
+
+        val currentUser = userRepository.findById(currentUserUid)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "현재 사용자를 찾을 수 없습니다: $currentUserUid") }
+        val otherUser = userRepository.findById(otherUserUid)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "대화 상대방 사용자를 찾을 수 없습니다: $otherUserUid") }
+
+        // ChatMessageRepository에 추가한 searchMessagesBetweenUsers 메소드 호출
+        val messagesSlice = chatMessageRepository.searchMessagesBetweenUsers(
+            currentUser,
+            otherUser,
+            keyword, // %keyword% 처리는 Repository의 JPQL에서 CONCAT으로 처리
+            pageable
+        ) //
+
+        logger.info(
+            "Search found {} messages for keyword '{}' between {} and {}. Has next page: {}",
+            messagesSlice.numberOfElements, keyword, currentUserUid, otherUserUid, messagesSlice.hasNext()
+        )
+        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice) // 기존 DTO 변환 로직 재활용
+    }
+    // --- 새로운 검색 메소드 추가 끝 ---
+
+
+    @Transactional
+    fun processNewMessage(chatMessageDto: ChatMessageDto, senderPrincipalName: String?) {
+        // ... (이전 코드와 동일) ...
+        val actualSenderUid = senderPrincipalName ?: chatMessageDto.senderUid
+        val receiverUid = chatMessageDto.receiverUid
+
+        if (actualSenderUid.isBlank() || receiverUid == null || receiverUid.isBlank()) {
+            logger.warn("processNewMessage: Sender or Receiver UID is missing. Sender: {}, Receiver: {}", actualSenderUid, receiverUid)
+            return
+        }
+
+        val senderOptional = userRepository.findById(actualSenderUid)
+        val receiverOptional = userRepository.findById(receiverUid)
+
+        if (senderOptional.isEmpty || receiverOptional.isEmpty) {
+            logger.warn("processNewMessage: Sender or Receiver not found in DB. SenderUID: {}, ReceiverUID: {}", actualSenderUid, receiverUid)
+            return
+        }
+        val sender = senderOptional.get()
+        val receiver = receiverOptional.get()
+
+        val chatMessageEntity = ChatMessage(
+            sender = sender,
+            receiver = receiver,
+            content = chatMessageDto.content ?: ""
+        )
+        val savedMessageEntity = chatMessageRepository.save(chatMessageEntity)
+        logger.info("processNewMessage: Message ID {} saved. From: {}, To: {}", savedMessageEntity.id, sender.uid, receiver.uid)
+
+        val messageToSendDto = ChatMessageDto(
+            id = savedMessageEntity.id,
+            type = chatMessageDto.type,
+            content = savedMessageEntity.content,
+            senderUid = sender.uid,
+            senderNickname = sender.nickname,
+            receiverUid = receiver.uid,
+            timestamp = savedMessageEntity.createdAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+            isRead = savedMessageEntity.isRead
+        )
+
+        if (webSocketPresenceService.isUserOnline(receiver.uid)) {
+            messagingTemplate.convertAndSendToUser(
+                receiver.uid,
+                "/queue/private",
+                messageToSendDto
+            )
+            logger.info("processNewMessage: Message ID {} sent via WebSocket to online user UID: {}", savedMessageEntity.id, receiver.uid)
+        } else {
+            logger.info("processNewMessage: Receiver UID: {} is offline. Checking conditions for FCM.", receiver.uid)
+            val resultSlice = chatMessageRepository.findLatestMessageTimeBetweenUsersBefore(
+                sender,
+                receiver,
+                savedMessageEntity.createdAt,
+                PageRequest.of(0, 1)
+            )
+            val lastInteractionTime: LocalDateTime? = if (resultSlice.hasContent()) resultSlice.content[0] else null
+            val fiveMinutesAgo = LocalDateTime.now().minusMinutes(5)
+
+            if (lastInteractionTime == null || lastInteractionTime.isBefore(fiveMinutesAgo)) {
+                val conversationId = createCanonicalConversationId(sender.uid, receiver.uid)
+                if (!fcmSentForOfflineConversation.contains(conversationId)) {
+                    logger.info("processNewMessage: Receiver UID: {} is offline AND last interaction was >5 mins ago (or first message). Sending FCM for conversationId: {}.", receiver.uid, conversationId)
+
+                    receiver.fcmToken?.let { token ->
+                        if (token.isNotBlank()) {
+                            val fcmTitle = "알림"
+                            val fcmBody = "새로운 일정이 등록되었습니다."
+                            fcmService.sendNotification(
+                                token,
+                                fcmTitle,
+                                fcmBody,
+                                mapOf(
+                                    "type" to "NEW_CHAT_MESSAGE",
+                                    "messageId" to savedMessageEntity.id,
+                                    "senderUid" to sender.uid,
+                                    "senderNickname" to (sender.nickname ?: "새로운 메시지")
+                                )
+                            )
+                            fcmSentForOfflineConversation.add(conversationId)
+                            logger.info("processNewMessage: FCM sent for conversationId: {} and marked as sent.", conversationId)
+                        } else {
+                            logger.warn("processNewMessage: Receiver UID {} has a blank FCM token. Cannot send FCM for conversationId: {}.", receiver.uid, conversationId)
+                        }
+                    } ?: logger.warn("processNewMessage: Receiver UID {} has no FCM token. Cannot send FCM for conversationId: {}.", receiver.uid, conversationId)
+                } else {
+                    logger.info("processNewMessage: FCM for conversationId: {} was already sent recently for this offline period. Suppressing new FCM for message ID {}.", conversationId, savedMessageEntity.id)
+                }
+            } else {
+                logger.info("processNewMessage: Receiver UID: {} is offline BUT last interaction was within 5 mins. FCM not sent for message ID {}.", receiver.uid, savedMessageEntity.id)
+            }
+        }
+
+        messagingTemplate.convertAndSendToUser(
+            sender.uid,
+            "/queue/private",
+            messageToSendDto
+        )
+        logger.info("processNewMessage: Sent message feedback (ID {}) to sender UID: {}", savedMessageEntity.id, sender.uid)
+    }
+
+    @Transactional
+    fun markMessageAsRead(readEventDto: MessageReadEventDto, readerPrincipalName: String?) {
+        // ... (이전 코드와 동일) ...
+        val readerUid = readerPrincipalName
+        if (readerUid == null) {
+            logger.warn("markMessageAsRead: User not authenticated. Cannot process read event: {}", readEventDto)
+            return
+        }
+
+        val messageOptional = chatMessageRepository.findById(readEventDto.messageId)
+        if (messageOptional.isEmpty) {
+            logger.warn("markMessageAsRead: Message with ID {} not found.", readEventDto.messageId)
+            return
+        }
+        val messageEntity = messageOptional.get()
+
+        if (messageEntity.receiver.uid != readerUid) {
+            logger.warn("markMessageAsRead: User UID: {} is not the receiver of message ID: {}. Forbidden.", readerUid, readEventDto.messageId)
+            return
+        }
+
+        if (!messageEntity.isRead) {
+            messageEntity.isRead = true
+            messageEntity.readAt = LocalDateTime.now()
+            val savedReadMessage = chatMessageRepository.save(messageEntity)
+            logger.info("markMessageAsRead: Message ID {} marked as read in DB for receiver UID: {}", savedReadMessage.id, readerUid)
+
+            val originalSenderUid = savedReadMessage.sender.uid
+            val confirmationDto = MessageReadConfirmationDto(
+                messageId = savedReadMessage.id,
+                readerUid = readerUid,
+                readAt = savedReadMessage.readAt?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+            )
+            messagingTemplate.convertAndSendToUser(
+                originalSenderUid,
+                "/queue/readReceipts",
+                confirmationDto
+            )
+            logger.info("markMessageAsRead: Sent read confirmation for message ID: {} to original sender UID: {}", savedReadMessage.id, originalSenderUid)
+
+            val conversationId = createCanonicalConversationId(originalSenderUid, readerUid)
+            if (fcmSentForOfflineConversation.remove(conversationId)) {
+                logger.info("markMessageAsRead: FCM sent flag cleared for conversationId: {} because receiver read messages.", conversationId)
+            }
+        } else {
+            logger.info("markMessageAsRead: Message ID: {} was already marked as read.", readEventDto.messageId)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun handleUserJoin(chatMessageDto: ChatMessageDto, senderPrincipalName: String?, sessionAttributes: MutableMap<String, Any>) {
+        // ... (이전 코드와 동일) ...
+        val actualSenderUid = senderPrincipalName ?: chatMessageDto.senderUid
+        if (actualSenderUid.isBlank()){
+            logger.warn("handleUserJoin: Sender UID is missing.")
+            return
+        }
+
+        val senderNickname = userRepository.findById(actualSenderUid).map { it.nickname }.orElse("Unknown User")
+
+        sessionAttributes["userUid"] = actualSenderUid
+        sessionAttributes["nickname"] = senderNickname!!
+        logger.info("handleUserJoin: User {} ({}) session attributes set.", senderNickname, actualSenderUid)
+
+        val joinMessage = ChatMessageDto(
+            type = MessageType.JOIN,
+            content = "$senderNickname 님이 입장했습니다.",
+            senderUid = actualSenderUid,
+            senderNickname = senderNickname,
+            receiverUid = null,
+            timestamp = System.currentTimeMillis(),
+            isRead = true
+        )
+        messagingTemplate.convertAndSend("/topic/public", joinMessage)
+        logger.info("handleUserJoin: Sent JOIN message to /topic/public for user: {}", senderNickname)
+    }
+
+    // deleteMessage 메소드는 ChatService에 이미 존재한다고 가정 (이전 답변에서 추가)
+    @Transactional
+    fun deleteMessage(currentUserUid: String, messageId: String) { //
+        logger.info("User UID: {} attempting to delete message ID: {}", currentUserUid, messageId)
+
+        val message = chatMessageRepository.findById(messageId)
+            .orElseThrow {
+                logger.warn("deleteMessage: Message not found with ID: {} for delete attempt by user UID: {}", messageId, currentUserUid)
+                ResponseStatusException(HttpStatus.NOT_FOUND, "삭제할 메시지를 찾을 수 없습니다.")
+            }
+
+        if (message.sender.uid != currentUserUid) {
+            logger.warn("deleteMessage: User UID: {} attempted to delete message ID: {} not owned by them (owner: {}). Forbidden.",
+                currentUserUid, messageId, message.sender.uid)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "해당 메시지를 삭제할 권한이 없습니다.")
+        }
+
+        if (message.isDeleted) {
+            logger.info("deleteMessage: Message ID: {} was already marked as deleted.", messageId)
+            return
+        }
+
+        message.isDeleted = true
+        message.deletedAt = LocalDateTime.now()
+        chatMessageRepository.save(message)
+        logger.info("deleteMessage: Message ID: {} marked as deleted by user UID: {}", messageId, currentUserUid)
+    }
+}
