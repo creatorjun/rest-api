@@ -15,6 +15,7 @@ data class AuthResponseDto(
     val loginProvider: String,
     val createdAt: String,
     val partnerUid: String?,
+    val partnerNickname: String?, // 새로 추가된 필드: 파트너 닉네임
     val appPasswordSet: Boolean // 앱 비밀번호 설정 여부 필드
 ) {
     companion object {
@@ -23,7 +24,7 @@ data class AuthResponseDto(
         // SocialLoginService와 AuthService에서 직접 생성자를 호출하므로,
         // 이 fromUser 메소드는 사용되지 않거나, 필요하다면 아래와 같이 수정할 수 있습니다.
         // 현재는 서비스에서 직접 생성자를 사용하고 있으므로 이 메소드는 참고용입니다.
-        fun fromUserForService(user: User, newAccessToken: String, newRefreshToken: String?, isNewUser: Boolean): AuthResponseDto {
+        fun fromUserForService(user: User, newAccessToken: String, newRefreshToken: String?, isNewUser: Boolean, partnerNickname: String?): AuthResponseDto {
             return AuthResponseDto(
                 accessToken = newAccessToken,
                 refreshToken = newRefreshToken,
@@ -33,7 +34,8 @@ data class AuthResponseDto(
                 loginProvider = user.loginProvider.name,
                 createdAt = user.createdAt.format(dateTimeFormatter),
                 partnerUid = user.partnerUserUid,
-                appPasswordSet = user.appPasswordIsSet // User 엔티티의 appPasswordIsSet 필드 사용하도록 변경 (만약 이 메소드가 사용된다면)
+                partnerNickname = partnerNickname, // 파트너 닉네임 설정
+                appPasswordSet = user.appPasswordIsSet
             )
         }
     }

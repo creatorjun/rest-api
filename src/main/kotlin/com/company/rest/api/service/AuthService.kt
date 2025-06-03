@@ -17,12 +17,12 @@ import java.time.format.DateTimeFormatter
 class AuthService(
     private val userRepository: UserRepository,
     private val jwtTokenProvider: JwtTokenProvider,
-    @Value("\${jwt.refresh-expiration-ms}") private val jwtRefreshExpirationMs: Long // 이 필드는 현재 refreshAccessToken 메소드에서 직접 사용되지 않음
+    @Value("\${jwt.refresh-expiration-ms}") private val jwtRefreshExpirationMs: Long
 ) {
     private val logger = LoggerFactory.getLogger(AuthService::class.java)
     private val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
-    @Transactional // Refresh Token으로 DB를 조회하므로 트랜잭션 필요
+    @Transactional
     fun refreshAccessToken(providedRefreshToken: String): Mono<AuthResponseDto> {
         logger.info(
             "Attempting to refresh access token with Refresh Token (first 10 chars): ${
@@ -68,8 +68,8 @@ class AuthService(
                         )
                     }"
                 )
-                null // orElseGet은 null을 반환해야 Optional이 empty로 처리됨
-            } ?: return Mono.error( // orElseGet에서 null 반환 시 여기서 처리
+                null
+            } ?: return Mono.error(
             ResponseStatusException(
                 HttpStatus.UNAUTHORIZED,
                 "Refresh Token이 DB 정보와 일치하지 않거나 해당 사용자가 존재하지 않습니다."
@@ -78,7 +78,6 @@ class AuthService(
 
         if (user.refreshTokenExpiryDate == null || user.refreshTokenExpiryDate!!.isBefore(LocalDateTime.now())) {
             logger.warn("Refresh Token expired in DB for user UID: $userUidFromToken. ExpiryDate in DB: ${user.refreshTokenExpiryDate}")
-            // Refresh Token 만료 시 DB에서 제거하는 로직은 유지
             user.refreshToken = null
             user.refreshTokenExpiryDate = null
             userRepository.save(user)
@@ -87,23 +86,39 @@ class AuthService(
 
         val newAccessToken = jwtTokenProvider.generateAccessToken(
             userUid = user.uid,
-            userSocialId = user.providerId, // User 엔티티의 providerId 사용
+            userSocialId = user.providerId,
             provider = user.loginProvider.name
         )
 
-        logger.info("New Access Token issued for user UID: ${user.uid} using existing Refresh Token. AppPasswordIsSet: {}", user.appPasswordIsSet)
+        // --- 파트너 닉네임 조회 로직 추가 ---
+        var partnerNickname: String? = null
+        user.partnerUserUid?.let { pUid ->
+            if (pUid.isNotBlank()) { // partnerUserUid가 빈 문자열이 아닌 경우에만 조회
+                partnerNickname = userRepository.findById(pUid)
+                    .map { it.nickname }
+                    .orElse(null) // 파트너를 찾지 못하면 null
+                if (partnerNickname == null) {
+                    logger.warn("Partner user not found with UID: {} for user UID: {}", pUid, user.uid)
+                }
+            }
+        }
+        // --- 파트너 닉네임 조회 로직 끝 ---
+
+        logger.info("New Access Token issued for user UID: {}. AppPasswordIsSet: {}. PartnerUID: {}, PartnerNickname: {}",
+            user.uid, user.appPasswordIsSet, user.partnerUserUid ?: "N/A", partnerNickname ?: "N/A")
 
         return Mono.just(
             AuthResponseDto(
                 accessToken = newAccessToken,
-                refreshToken = providedRefreshToken, // 기존 Refresh Token을 그대로 반환
-                isNew = false, // 토큰 재발급이므로 isNew는 항상 false
+                refreshToken = providedRefreshToken,
+                isNew = false,
                 uid = user.uid,
                 nickname = user.nickname,
                 loginProvider = user.loginProvider.name,
                 createdAt = user.createdAt.format(dateTimeFormatter),
                 partnerUid = user.partnerUserUid,
-                appPasswordSet = user.appPasswordIsSet // 변경된 부분: user.appPassword != null -> user.appPasswordIsSet
+                partnerNickname = partnerNickname, // 여기에 파트너 닉네임 설정
+                appPasswordSet = user.appPasswordIsSet
             )
         )
     }
