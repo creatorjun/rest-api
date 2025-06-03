@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.tags.Tag // Tag 임포트 확인
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -15,15 +15,15 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RequestParam
+// import org.springframework.web.bind.annotation.RequestParam // getLuckForZodiacAndDate에서만 사용하던 것이므로 삭제 가능
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeParseException
+// import java.time.format.DateTimeParseException // getLuckForZodiacAndDate에서만 사용하던 것이므로 삭제
 
 @RestController
-@RequestMapping("/api/v1/luck") // 엔드포인트 경로 변경
-@Tag(name = "Luck", description = "띠별 운세 조회 및 수동 가져오기 API") // Tag 이름 및 설명 변경
+@RequestMapping("/api/v1/luck")
+@Tag(name = "Luck", description = "띠별 운세 조회 및 수동 가져오기 API")
 class LuckController(
     private val geminiService: GeminiService
 ) {
@@ -55,58 +55,17 @@ class LuckController(
             return ResponseEntity.badRequest().build()
         }
 
-        val LuckData = geminiService.getLuckForZodiacSign(today, zodiacName)
+        val luckData = geminiService.getLuckForZodiacSign(today, zodiacName)
 
-        return if (LuckData != null) {
-            ResponseEntity.ok(LuckData)
+        return if (luckData != null) {
+            ResponseEntity.ok(luckData)
         } else {
             logger.warn("Luck data not found for today ({}) and zodiac: {}", today, zodiacName)
             ResponseEntity.notFound().build()
         }
     }
 
-    @Operation(
-        summary = "특정 날짜의 특정 띠별 운세 조회",
-        description = "지정된 날짜와 띠에 대한 운세 정보를 반환합니다. 날짜는 YYYY-MM-DD 형식으로 제공해야 합니다.",
-        responses = [
-            ApiResponse(
-                responseCode = "200", description = "운세 정보 조회 성공",
-                content = [Content(mediaType = "application/json", schema = Schema(implementation = ZodiacLuckDataDto::class))]
-            ),
-            ApiResponse(responseCode = "400", description = "잘못된 띠 이름 또는 날짜 형식"),
-            ApiResponse(responseCode = "404", description = "해당 띠 또는 해당 날짜의 운세 정보를 찾을 수 없거나 아직 준비되지 않음")
-        ]
-    )
-    @GetMapping("/{date}/{zodiacName}")
-    fun getLuckForZodiacAndDate(
-        @Parameter(description = "조회할 날짜 (YYYY-MM-DD 형식)", required = true, example = "2023-10-27")
-        @PathVariable date: String,
-        @Parameter(description = "조회할 띠 이름 (예: 쥐띠, 소띠, 호랑이띠 등)", required = true, example = "쥐띠")
-        @PathVariable zodiacName: String
-    ): ResponseEntity<ZodiacLuckDataDto> {
-        val requestDate: LocalDate = try {
-            LocalDate.parse(date)
-        } catch (e: DateTimeParseException) {
-            logger.warn("Invalid date format for date string: {}", date)
-            return ResponseEntity.badRequest().build()
-        }
-
-        logger.info("Request received for date {} Luck for zodiac: {}", requestDate, zodiacName)
-
-        if (zodiacName.isBlank()) {
-            logger.warn("Zodiac name is blank for date: {}", requestDate)
-            return ResponseEntity.badRequest().build()
-        }
-
-        val LuckData = geminiService.getLuckForZodiacSign(requestDate, zodiacName)
-
-        return if (LuckData != null) {
-            ResponseEntity.ok(LuckData)
-        } else {
-            logger.warn("Luck data not found for date {} and zodiac: {}", requestDate, zodiacName)
-            ResponseEntity.notFound().build()
-        }
-    }
+    // `/api/v1/luck/{date}/{zodiacName}` 엔드포인트 및 getLuckForZodiacAndDate() 메서드 삭제됨
 
     @Operation(
         summary = "오늘의 운세 정보 수동으로 가져오기 및 저장 (관리자/테스트용)",
