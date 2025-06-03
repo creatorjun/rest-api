@@ -18,10 +18,12 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.server.ResponseStatusException
 import reactor.core.publisher.Mono
+import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
+import java.nio.charset.StandardCharsets
 
 @Service
 class SocialLoginService(
@@ -36,41 +38,70 @@ class SocialLoginService(
 
     private data class VerifiedSocialUser(val originalId: String, val nickname: String?)
 
+    // SHA-256 해싱 함수
+    private fun sha256(input: String): String {
+        val bytes = input.toByteArray(StandardCharsets.UTF_8)
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+        return digest.fold("") { str, it -> str + "%02x".format(it) }
+    }
+
     @Transactional
     fun processLogin(request: SocialLoginRequestDto): Mono<AuthResponseDto> {
+        // 클라이언트는 request.id에 원본 소셜 ID를 보내야 함.
+        // verifySocialToken은 socialAccessToken을 검증하고 원본 소셜 ID(originalId)와 닉네임을 가져옴.
         return verifySocialToken(request)
             .flatMap { verifiedUser ->
+                // 클라이언트가 보낸 request.id (원본 소셜 ID여야 함)와
+                // 토큰 검증으로 얻은 verifiedUser.originalId가 일치하는지 추가 검증 가능 (선택 사항)
+                if (request.id != verifiedUser.originalId) {
+                    logger.warn(
+                        "Mismatch between client-sent ID ({}) and token-derived original ID ({}). Provider: {}",
+                        request.id, verifiedUser.originalId, request.platform
+                    )
+                    // 이 경우 에러 처리 또는 로깅 후 진행 결정 필요. 여기서는 일단 진행하나, 보안상 확인하는 것이 좋음.
+                    // Mono.error(ResponseStatusException(HttpStatus.UNAUTHORIZED, "제공된 ID와 토큰의 사용자 정보가 일치하지 않습니다."))
+                }
+
+                // DB에 저장 및 조회 시에는 verifiedUser.originalId를 해싱하여 사용
+                val hashedOriginalId = sha256(verifiedUser.originalId)
                 logger.info(
-                    "Social login attempt. Provider: ${request.platform}, " +
-                            "ClientSentHashedID: ${request.id}, " +
-                            "ProviderOriginalID (for reference/logging only): ${verifiedUser.originalId}"
+                    "Social login attempt. Provider: {}, ClientSentOriginalID: {}, HashedOriginalIDForDB: {}, VerifiedOriginalID: {}",
+                    request.platform,
+                    request.id, // 클라이언트가 보낸 원본 ID (로깅용)
+                    hashedOriginalId.take(10) + "...", // DB에 사용될 해시된 ID (일부만 로깅)
+                    verifiedUser.originalId.take(10) + "..." // 소셜 플랫폼에서 가져온 원본 ID (일부만 로깅)
                 )
 
                 var isNewUser = false
-                val userOptional = userRepository.findByProviderIdAndLoginProvider(request.id, request.platform)
+                // DB에서 해시된 ID로 사용자 조회
+                val userOptional = userRepository.findByProviderIdAndLoginProvider(hashedOriginalId, request.platform)
 
                 val userEntity = userOptional.orElseGet {
                     isNewUser = true
-                    logger.info("Creating new user. Provider: ${request.platform}, ProviderIdForDB (hashed by client): ${request.id}")
-                    val finalNickname = request.nickname ?: verifiedUser.nickname ?: "User_${request.id.take(6)}"
+                    logger.info(
+                        "Creating new user. Provider: {}, OriginalSocialID: {}, HashedProviderIdForDB: {}",
+                        request.platform,
+                        verifiedUser.originalId.take(10) + "...", // 원본 ID
+                        hashedOriginalId.take(10) + "..."       // 해시된 ID
+                    )
+                    val finalNickname = request.nickname ?: verifiedUser.nickname ?: "User_${verifiedUser.originalId.take(6)}"
                     val newUser = User(
                         nickname = finalNickname,
                         loginProvider = request.platform,
-                        providerId = request.id
-                        // appPassword는 소셜 로그인 시에는 null (사용자가 추후 설정)
-                        // appPasswordIsSet은 User 엔티티 기본값 false로 초기화됨
+                        providerId = hashedOriginalId // DB에는 백엔드에서 해싱한 ID를 저장
                     )
                     userRepository.save(newUser)
                 }
 
                 if (!isNewUser && request.nickname != null && request.nickname != userEntity.nickname) {
                     userEntity.nickname = request.nickname
-                    userEntity.updatedAt = LocalDateTime.now() // User 엔티티에 @PreUpdate 있으므로 명시적 호출은 선택적
+                    // userEntity.updatedAt = LocalDateTime.now() // @PreUpdate로 자동 관리
                 }
 
                 val appAccessToken = jwtTokenProvider.generateAccessToken(
                     userUid = userEntity.uid,
-                    userSocialId = userEntity.providerId,
+                    userSocialId = userEntity.providerId, // DB에 저장된 해시된 ID
                     provider = userEntity.loginProvider.name
                 )
                 val appRefreshToken = jwtTokenProvider.generateRefreshToken(
@@ -83,9 +114,16 @@ class SocialLoginService(
                     ZoneId.systemDefault()
                 )
                 userEntity.refreshTokenExpiryDate = refreshTokenExpiry
-                userRepository.save(userEntity) // isNewUser이거나, 닉네임 변경, 토큰 정보 업데이트 시 저장
+                userRepository.save(userEntity)
 
-                logger.info("Access & Refresh Tokens issued for user UID: ${userEntity.uid}, Provider: ${userEntity.loginProvider}. Is new user: $isNewUser. AppPasswordIsSet: {}", userEntity.appPasswordIsSet)
+                logger.info(
+                    "Access & Refresh Tokens issued for user UID: {}. Provider: {}. Is new user: {}. AppPasswordIsSet: {}. Stored ProviderId (hashed): {}",
+                    userEntity.uid,
+                    userEntity.loginProvider,
+                    isNewUser,
+                    userEntity.appPasswordIsSet,
+                    userEntity.providerId.take(10) + "..."
+                )
 
                 Mono.just(
                     AuthResponseDto(
@@ -97,22 +135,24 @@ class SocialLoginService(
                         loginProvider = userEntity.loginProvider.name,
                         createdAt = userEntity.createdAt.format(dateTimeFormatter),
                         partnerUid = userEntity.partnerUserUid,
-                        appPasswordSet = userEntity.appPasswordIsSet // 변경된 부분: userEntity.appPassword != null -> userEntity.appPasswordIsSet
+                        appPasswordSet = userEntity.appPasswordIsSet
                     )
                 )
             }
             .doOnError { e ->
                 if (e !is ResponseStatusException) {
                     logger.error(
-                        "Unexpected error during social login for provider ${request.platform}, " +
-                                "clientSentId ${request.id}", e
+                        "Unexpected error during social login for provider {}, clientSentOriginalId (from request.id) {}",
+                        request.platform, request.id, e
                     )
                 }
+                // ResponseStatusException은 그대로 전파되거나 @ControllerAdvice에서 처리
             }
     }
 
     private fun verifySocialToken(request: SocialLoginRequestDto): Mono<VerifiedSocialUser> {
-        logger.info("Verifying social token for provider: ${request.platform}, AccessToken (first 10 chars): ${request.socialAccessToken.take(10)}...")
+        logger.info("Verifying social token for provider: {}, ClientSentOriginalID (from request.id): {}, AccessToken (first 10 chars): {}...",
+            request.platform, request.id, request.socialAccessToken.take(10))
         return when (request.platform) {
             LoginProvider.NAVER -> fetchNaverUserProfile(request.socialAccessToken)
             LoginProvider.KAKAO -> fetchKakaoUserProfile(request.socialAccessToken)
@@ -146,8 +186,8 @@ class SocialLoginService(
             .flatMap { naverResponse ->
                 if (naverResponse.resultCode == "00" && naverResponse.response != null) {
                     val profile = naverResponse.response
-                    logger.info("Successfully fetched Naver profile. Original Provider ID: ${profile.id}")
-                    Mono.just(VerifiedSocialUser(profile.id, profile.nickname))
+                    logger.info("Successfully fetched Naver profile. Original Provider ID (from Naver): {}", profile.id.take(10) + "...")
+                    Mono.just(VerifiedSocialUser(profile.id, profile.nickname)) // 원본 ID 반환
                 } else {
                     logger.error(
                         "Naver user info fetch logic error. ResultCode: ${naverResponse.resultCode}, Message: ${naverResponse.message}"
@@ -185,8 +225,8 @@ class SocialLoginService(
             .map { kakaoResponse ->
                 val nickname = kakaoResponse.properties?.nickname
                     ?: kakaoResponse.kakaoAccount?.profile?.nickname
-                logger.info("Successfully fetched Kakao profile. Original Provider ID: ${kakaoResponse.id}")
-                VerifiedSocialUser(kakaoResponse.id.toString(), nickname)
+                logger.info("Successfully fetched Kakao profile. Original Provider ID (from Kakao): {}", kakaoResponse.id.toString().take(10) + "...")
+                VerifiedSocialUser(kakaoResponse.id.toString(), nickname) // 원본 ID 반환
             }
     }
 }
