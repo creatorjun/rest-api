@@ -28,22 +28,22 @@ data class DailyWeatherForecast(
     val forecastDate: LocalDate, // 예보 대상 날짜
 
     @Column(name = "min_temp", nullable = true)
-    val minTemp: Int?, // 최저 기온 (섭씨)
+    var minTemp: Int?, // 최저 기온 (섭씨)
 
     @Column(name = "max_temp", nullable = true)
-    val maxTemp: Int?, // 최고 기온 (섭씨)
+    var maxTemp: Int?, // 최고 기온 (섭씨)
 
     @Column(name = "weather_am", length = 100, nullable = true)
-    val weatherAm: String?, // 오전 날씨 상태 (예: "맑음", "구름많음", "흐리고 비")
+    var weatherAm: String?, // 오전 날씨 상태 (예: "맑음", "구름많음", "흐리고 비")
 
     @Column(name = "weather_pm", length = 100, nullable = true)
-    val weatherPm: String?, // 오후 날씨 상태
+    var weatherPm: String?, // 오후 날씨 상태
 
     @Column(name = "rain_prob_am", nullable = true)
-    val rainProbAm: Int?, // 오전 강수 확률 (%)
+    var rainProbAm: Int?, // 오전 강수 확률 (%)
 
     @Column(name = "rain_prob_pm", nullable = true)
-    val rainProbPm: Int?, // 오후 강수 확률 (%)
+    var rainProbPm: Int?, // 오후 강수 확률 (%)
 
     // 참고: API가 8~10일차 예보는 오전/오후 구분 없이 제공할 경우,
     // weatherAm/rainProbAm에 해당 값을 저장하고 weatherPm/rainProbPm은 null로 두거나
