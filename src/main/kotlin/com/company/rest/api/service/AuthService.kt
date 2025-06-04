@@ -86,40 +86,41 @@ class AuthService(
 
         val newAccessToken = jwtTokenProvider.generateAccessToken(
             userUid = user.uid,
-            userSocialId = user.providerId,
-            provider = user.loginProvider.name
+            userSocialId = user.providerId, // user.providerId (해싱된 소셜 ID) 전달
+            provider = user.loginProvider.name // JWT에는 여전히 Enum의 name (대문자) 사용 가능, 또는 소문자 value 사용도 고려
         )
 
-        // --- 파트너 닉네임 조회 로직 추가 ---
         var partnerNickname: String? = null
         user.partnerUserUid?.let { pUid ->
-            if (pUid.isNotBlank()) { // partnerUserUid가 빈 문자열이 아닌 경우에만 조회
+            if (pUid.isNotBlank()) {
                 partnerNickname = userRepository.findById(pUid)
                     .map { it.nickname }
-                    .orElse(null) // 파트너를 찾지 못하면 null
+                    .orElse(null)
                 if (partnerNickname == null) {
                     logger.warn("Partner user not found with UID: {} for user UID: {}", pUid, user.uid)
                 }
             }
         }
-        // --- 파트너 닉네임 조회 로직 끝 ---
 
         logger.info("New Access Token issued for user UID: {}. AppPasswordIsSet: {}. PartnerUID: {}, PartnerNickname: {}",
             user.uid, user.appPasswordIsSet, user.partnerUserUid ?: "N/A", partnerNickname ?: "N/A")
 
-        return Mono.just(
-            AuthResponseDto(
-                accessToken = newAccessToken,
-                refreshToken = providedRefreshToken,
-                isNew = false,
-                uid = user.uid,
-                nickname = user.nickname,
-                loginProvider = user.loginProvider.name,
-                createdAt = user.createdAt.format(dateTimeFormatter),
-                partnerUid = user.partnerUserUid,
-                partnerNickname = partnerNickname, // 여기에 파트너 닉네임 설정
-                appPasswordSet = user.appPasswordIsSet
-            )
+        val authResponse = AuthResponseDto(
+            accessToken = newAccessToken,
+            refreshToken = providedRefreshToken, // 기존 리프레시 토큰을 그대로 반환
+            isNew = false, // Access Token 재발급이므로 새로운 사용자는 아님
+            uid = user.uid,
+            nickname = user.nickname,
+            loginProvider = user.loginProvider.value, // .name -> .value 로 변경
+            createdAt = user.createdAt.format(dateTimeFormatter),
+            partnerUid = user.partnerUserUid,
+            partnerNickname = partnerNickname,
+            appPasswordSet = user.appPasswordIsSet
         )
+
+        // 디버그 로깅 추가
+        logger.debug("Access token refresh AuthResponseDto for user UID {}: {}", user.uid, authResponse)
+
+        return Mono.just(authResponse)
     }
 }
