@@ -92,7 +92,7 @@ class SocialLoginService(
                 val appAccessToken = jwtTokenProvider.generateAccessToken(
                     userUid = userEntity.uid,
                     userSocialId = userEntity.providerId,
-                    provider = userEntity.loginProvider.name
+                    provider = userEntity.loginProvider.name // JWT에는 여전히 Enum의 name (대문자) 사용 가능, 또는 소문자 value 사용도 고려
                 )
                 val appRefreshToken = jwtTokenProvider.generateRefreshToken(
                     userUid = userEntity.uid
@@ -105,21 +105,19 @@ class SocialLoginService(
                 )
                 userEntity.refreshTokenExpiryDate = refreshTokenExpiry
 
-                // --- 파트너 닉네임 조회 로직 추가 ---
                 var partnerNickname: String? = null
                 userEntity.partnerUserUid?.let { pUid ->
-                    if (pUid.isNotBlank()) { // partnerUserUid가 빈 문자열이 아닌 경우에만 조회
+                    if (pUid.isNotBlank()) {
                         partnerNickname = userRepository.findById(pUid)
                             .map { it.nickname }
-                            .orElse(null) // 파트너를 찾지 못하면 null
+                            .orElse(null)
                         if (partnerNickname == null) {
                             logger.warn("Partner user not found with UID: {} for user UID: {}", pUid, userEntity.uid)
                         }
                     }
                 }
-                // --- 파트너 닉네임 조회 로직 끝 ---
 
-                userRepository.save(userEntity) // partnerNickname 조회 후 userEntity를 다시 저장할 필요는 없음 (userEntity가 변경된 것은 아니므로)
+                userRepository.save(userEntity)
 
                 logger.info(
                     "Access & Refresh Tokens issued for user UID: {}. Provider: {}. Is new user: {}. AppPasswordIsSet: {}. Stored ProviderId (hashed): {}, PartnerUID: {}, PartnerNickname: {}",
@@ -132,20 +130,22 @@ class SocialLoginService(
                     partnerNickname ?: "N/A"
                 )
 
-                Mono.just(
-                    AuthResponseDto(
-                        accessToken = appAccessToken,
-                        refreshToken = appRefreshToken,
-                        isNew = isNewUser,
-                        uid = userEntity.uid,
-                        nickname = userEntity.nickname,
-                        loginProvider = userEntity.loginProvider.name,
-                        createdAt = userEntity.createdAt.format(dateTimeFormatter),
-                        partnerUid = userEntity.partnerUserUid,
-                        partnerNickname = partnerNickname, // 여기에 파트너 닉네임 설정
-                        appPasswordSet = userEntity.appPasswordIsSet
-                    )
+                val authResponse = AuthResponseDto(
+                    accessToken = appAccessToken,
+                    refreshToken = appRefreshToken,
+                    isNew = isNewUser,
+                    uid = userEntity.uid,
+                    nickname = userEntity.nickname,
+                    loginProvider = userEntity.loginProvider.value, // .name -> .value 로 변경
+                    createdAt = userEntity.createdAt.format(dateTimeFormatter),
+                    partnerUid = userEntity.partnerUserUid,
+                    partnerNickname = partnerNickname,
+                    appPasswordSet = userEntity.appPasswordIsSet
                 )
+
+                logger.debug("Login success AuthResponseDto for user UID {}: {}", userEntity.uid, authResponse)
+
+                Mono.just(authResponse)
             }
             .doOnError { e ->
                 if (e !is ResponseStatusException) {
