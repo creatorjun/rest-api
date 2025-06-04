@@ -75,7 +75,7 @@ class LuckController(
             ApiResponse(responseCode = "500", description = "운세 정보 가져오기 작업 시작 중 내부 서버 오류 발생")
         ]
     )
-    @PostMapping("/admin/trigger-fetch-today")
+    @PostMapping("/admin/fetch")
     fun manuallyTriggerFetchTodaysLuck(): ResponseEntity<String> {
         val today = LocalDate.now(KOREA_ZONE_ID)
         logger.info("Manual trigger request received to fetch and store Lucks for today: {}", today)

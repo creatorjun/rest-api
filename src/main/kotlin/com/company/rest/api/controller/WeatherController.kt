@@ -1,6 +1,7 @@
 package com.company.rest.api.controller
 
 import com.company.rest.api.dto.WeeklyForecastResponseDto
+import com.company.rest.api.scheduler.WeatherScheduler
 import com.company.rest.api.service.WeatherService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -18,14 +20,14 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 
 @RestController
 @RequestMapping("/api/v1/weather")
-@Tag(name = "Weather Forecasts", description = "주간 일기 예보 조회 API")
+@Tag(name = "Weather Forecasts", description = "주간 일기 예보 조회 및 스케줄러 수동 실행 API")
 class WeatherController(
-    private val weatherService: WeatherService
+    private val weatherService: WeatherService,
+    private val weatherScheduler: WeatherScheduler
 ) {
     private val logger = LoggerFactory.getLogger(WeatherController::class.java)
     private val KOREA_ZONE_ID = ZoneId.of("Asia/Seoul")
@@ -50,7 +52,7 @@ class WeatherController(
     fun getWeeklyForecastByCityName(
         @Parameter(description = "조회할 도시 이름 (예: 서울, 부산)", required = true, example = "서울")
         @PathVariable cityName: String,
-        @Parameter(description = "조회 시작 날짜 (YYYY-MM-DD 형식). 제공하지 않으면 오늘 날짜 기준.", required = false, example = "2025-06-03")
+        @Parameter(description = "조회 시작 날짜 (YYYY-MM-DD 형식). 제공하지 않으면 오늘 날짜 기준.", required = false, example = "2025-06-04")
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         date: LocalDate?
     ): ResponseEntity<WeeklyForecastResponseDto> {
@@ -67,63 +69,29 @@ class WeatherController(
         }
     }
 
-    // `/api/v1/weather/regions` 엔드포인트 및 getAvailableRegions() 메서드 삭제됨
-
     @Operation(
-        summary = "수동으로 특정 도시의 단기 및 중기 예보 모두 가져오기 (관리자/테스트용)",
-        description = "특정 도시의 단기 예보(05시 발표 기준) 및 중기 예보(06시 발표 기준)를 즉시 가져와 DB에 저장/업데이트합니다. 날짜를 지정하면 해당 날짜 기준으로 가져옵니다. 도시 식별자로 '기온 예보 구역 코드'를 사용합니다.",
+        summary = "날씨 정보 스케줄러 수동 실행 (관리자/테스트용)",
+        description = "등록된 날씨 정보 스케줄러 작업(단기예보 및 중기예보 가져오기)들을 즉시 일괄 실행합니다. 이는 오전 5시 15분 및 6시 10분에 실행되도록 설정된 스케줄러 작업을 수동으로 트리거합니다.",
         responses = [
-            ApiResponse(responseCode = "200", description = "단기 및 중기 예보 가져오기 작업이 성공적으로 요청됨."),
-            ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 유효하지 않은 지역 코드 또는 날짜 형식)"),
-            ApiResponse(responseCode = "500", description = "예보 가져오기 작업 중 내부 서버 오류 발생")
+            ApiResponse(responseCode = "200", description = "날씨 정보 스케줄러 작업들이 성공적으로 실행 요청됨."),
+            ApiResponse(responseCode = "500", description = "스케줄러 작업 실행 중 내부 서버 오류 발생")
         ]
     )
-    @PostMapping("/admin/trigger-fetch-city")
-    fun manuallyTriggerFetchForCity(
-        @Parameter(description = "예보를 가져올 도시의 기온 예보 구역 코드 (RegionCodeConfig의 키 값)", required = true, example = "11B10101")
-        @RequestParam cityTempRegId: String,
-        @Parameter(description = "기준 발표 날짜 (YYYY-MM-DD 형식). 제공하지 않으면 오늘 날짜 기준.", required = false, example = "2025-06-03")
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-        targetDate: LocalDate?
-    ): ResponseEntity<String> {
-        val regionDetails = weatherService.getRegionCodeMap()[cityTempRegId] // 이 부분에서 getRegionCodeMap()이 여전히 필요함
-        if (regionDetails == null) {
-            return ResponseEntity.badRequest().body("지원하지 않거나 유효하지 않은 도시 지역 코드입니다: $cityTempRegId")
-        }
-
-        val kmaTargetDate = targetDate ?: LocalDate.now(KOREA_ZONE_ID)
-
-        val baseDateTimeForShortTerm = kmaTargetDate.atTime(LocalTime.of(5, 0))
-        val baseDateTimeForMidTerm = kmaTargetDate.atTime(LocalTime.of(6, 0))
-
-        var successMessage = StringBuilder()
-        var errorMessage = StringBuilder()
-
+    @PostMapping("/admin/fetch")
+    fun triggerWeatherTasks(): ResponseEntity<String> {
+        logger.info("Manual trigger request received for all weather tasks.")
         try {
-            logger.info("Manual trigger for SHORT-TERM forecast for city: {} (Code: {}), baseDateTime: {}", regionDetails.cityName, cityTempRegId, baseDateTimeForShortTerm)
-            weatherService.fetchAndStoreShortTermForecastsForRegion(cityTempRegId, baseDateTimeForShortTerm)
-            successMessage.append("단기 예보(${baseDateTimeForShortTerm.toLocalTime()} 발표 기준) 가져오기 요청 성공. ")
+            logger.info("Triggering fetchShortTermForecastsTask manually.")
+            weatherScheduler.fetchShortTermForecastsTask()
+            logger.info("Triggering fetchMidTermForecastsTask manually.")
+            weatherScheduler.fetchMidTermForecastsTask()
+            val message = "단기 및 중기 예보 가져오기 스케줄러 작업이 수동으로 실행 요청되었습니다. 처리 결과는 서버 로그를 확인해주세요."
+            logger.info(message)
+            return ResponseEntity.ok(message)
         } catch (e: Exception) {
-            logger.error("Error during manual trigger for fetching SHORT-TERM city {} forecast: {}", cityTempRegId, e.message, e)
-            errorMessage.append("단기 예보 가져오기 중 오류 발생: ${e.message}. ")
+            logger.error("Error during manual trigger of weather tasks: {}", e.message, e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("날씨 스케줄러 작업 실행 중 오류가 발생했습니다: ${e.message}")
         }
-
-        try {
-            logger.info("Manual trigger for MID-TERM forecast for city: {} (Code: {}), baseDateTime: {}", regionDetails.cityName, cityTempRegId, baseDateTimeForMidTerm)
-            weatherService.fetchAndStoreWeeklyForecastsForCity(cityTempRegId, baseDateTimeForMidTerm)
-            successMessage.append("중기 예보(${baseDateTimeForMidTerm.toLocalTime()} 발표 기준) 가져오기 요청 성공.")
-        } catch (e: Exception) {
-            logger.error("Error during manual trigger for fetching MID-TERM city {} forecast: {}", cityTempRegId, e.message, e)
-            errorMessage.append("중기 예보 가져오기 중 오류 발생: ${e.message}.")
-        }
-
-        if (errorMessage.isNotEmpty()) {
-            val finalMessage = "도시(${regionDetails.cityName}, 코드: $cityTempRegId) 예보 가져오기 요청 결과: ${successMessage}${errorMessage}처리 결과는 서버 로그를 확인해주세요."
-            return ResponseEntity.internalServerError().body(finalMessage)
-        }
-
-        val finalMessage = "도시(${regionDetails.cityName}, 코드: $cityTempRegId)에 대한 단기 및 중기 예보 가져오기 작업이 요청되었습니다. ${successMessage}처리 결과는 서버 로그를 확인해주세요."
-        logger.info(finalMessage)
-        return ResponseEntity.ok(finalMessage)
     }
 }
