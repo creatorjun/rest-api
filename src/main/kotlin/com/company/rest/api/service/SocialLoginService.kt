@@ -81,6 +81,8 @@ class SocialLoginService(
                         nickname = finalNickname,
                         loginProvider = request.platform,
                         providerId = hashedOriginalId
+                        // fcmToken은 로그인 시점에서는 아직 없을 수 있으므로, 여기서는 설정하지 않음.
+                        // 필요하다면 클라이언트가 로그인 후 별도 API로 FCM 토큰을 등록/갱신하도록 유도.
                     )
                     userRepository.save(newUser)
                 }
@@ -92,7 +94,7 @@ class SocialLoginService(
                 val appAccessToken = jwtTokenProvider.generateAccessToken(
                     userUid = userEntity.uid,
                     userSocialId = userEntity.providerId,
-                    provider = userEntity.loginProvider.name // JWT에는 여전히 Enum의 name (대문자) 사용 가능, 또는 소문자 value 사용도 고려
+                    provider = userEntity.loginProvider.name
                 )
                 val appRefreshToken = jwtTokenProvider.generateRefreshToken(
                     userUid = userEntity.uid
@@ -130,17 +132,19 @@ class SocialLoginService(
                     partnerNickname ?: "N/A"
                 )
 
+                // 여기가 문제의 지점이었습니다! userEntity.fcmToken을 전달하도록 수정했습니다.
                 val authResponse = AuthResponseDto(
                     accessToken = appAccessToken,
                     refreshToken = appRefreshToken,
                     isNew = isNewUser,
                     uid = userEntity.uid,
                     nickname = userEntity.nickname,
-                    loginProvider = userEntity.loginProvider.value, // .name -> .value 로 변경
+                    loginProvider = userEntity.loginProvider.value,
                     createdAt = userEntity.createdAt.format(dateTimeFormatter),
                     partnerUid = userEntity.partnerUserUid,
                     partnerNickname = partnerNickname,
-                    appPasswordSet = userEntity.appPasswordIsSet
+                    appPasswordSet = userEntity.appPasswordIsSet,
+                    fcmToken = userEntity.fcmToken // 사용자 엔티티의 fcmToken 값을 전달
                 )
 
                 logger.debug("Login success AuthResponseDto for user UID {}: {}", userEntity.uid, authResponse)

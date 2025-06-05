@@ -86,8 +86,8 @@ class AuthService(
 
         val newAccessToken = jwtTokenProvider.generateAccessToken(
             userUid = user.uid,
-            userSocialId = user.providerId, // user.providerId (해싱된 소셜 ID) 전달
-            provider = user.loginProvider.name // JWT에는 여전히 Enum의 name (대문자) 사용 가능, 또는 소문자 value 사용도 고려
+            userSocialId = user.providerId,
+            provider = user.loginProvider.name
         )
 
         var partnerNickname: String? = null
@@ -105,20 +105,21 @@ class AuthService(
         logger.info("New Access Token issued for user UID: {}. AppPasswordIsSet: {}. PartnerUID: {}, PartnerNickname: {}",
             user.uid, user.appPasswordIsSet, user.partnerUserUid ?: "N/A", partnerNickname ?: "N/A")
 
+        // 여기가 문제의 지점이었습니다! user.fcmToken을 전달하도록 수정했습니다.
         val authResponse = AuthResponseDto(
             accessToken = newAccessToken,
-            refreshToken = providedRefreshToken, // 기존 리프레시 토큰을 그대로 반환
-            isNew = false, // Access Token 재발급이므로 새로운 사용자는 아님
+            refreshToken = providedRefreshToken,
+            isNew = false,
             uid = user.uid,
             nickname = user.nickname,
-            loginProvider = user.loginProvider.value, // .name -> .value 로 변경
+            loginProvider = user.loginProvider.value,
             createdAt = user.createdAt.format(dateTimeFormatter),
             partnerUid = user.partnerUserUid,
             partnerNickname = partnerNickname,
-            appPasswordSet = user.appPasswordIsSet
+            appPasswordSet = user.appPasswordIsSet,
+            fcmToken = user.fcmToken // 사용자 엔티티의 fcmToken 값을 전달
         )
 
-        // 디버그 로깅 추가
         logger.debug("Access token refresh AuthResponseDto for user UID {}: {}", user.uid, authResponse)
 
         return Mono.just(authResponse)
