@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 
 @RestController
@@ -71,7 +72,11 @@ class WeatherController(
 
     @Operation(
         summary = "날씨 정보 스케줄러 수동 실행 (관리자/테스트용)",
-        description = "등록된 날씨 정보 스케줄러 작업(단기예보 및 중기예보 가져오기)들을 즉시 일괄 실행합니다. 이는 오전 5시 15분 및 6시 10분에 실행되도록 설정된 스케줄러 작업을 수동으로 트리거합니다.",
+        description = """
+            등록된 날씨 정보 스케줄러 작업(단기예보 및 중기예보 가져오기)들을 즉시 일괄 실행합니다.
+            한국 시간 오전 6시 10분을 기준으로, 이전 시간에 요청하면 전날 데이터를, 이후 시간에 요청하면 당일 데이터를 가져옵니다.
+            이는 오전 5시 15분 및 6시 10분에 발표되는 최신 데이터를 올바르게 가져오기 위함입니다.
+        """,
         responses = [
             ApiResponse(responseCode = "200", description = "날씨 정보 스케줄러 작업들이 성공적으로 실행 요청됨."),
             ApiResponse(responseCode = "500", description = "스케줄러 작업 실행 중 내부 서버 오류 발생")
@@ -80,16 +85,31 @@ class WeatherController(
     @PostMapping("/admin/fetch")
     fun triggerWeatherTasks(): ResponseEntity<String> {
         logger.info("Manual trigger request received for all weather tasks.")
+
+        val nowInKorea = LocalTime.now(KOREA_ZONE_ID)
+        val cutoffTime = LocalTime.of(6, 10)
+
+        // 오전 6시 10분 이전에 실행하면 전날 데이터를, 이후에 실행하면 당일 데이터를 기준으로 함
+        val targetDate = if (nowInKorea.isBefore(cutoffTime)) {
+            LocalDate.now(KOREA_ZONE_ID).minusDays(1)
+        } else {
+            LocalDate.now(KOREA_ZONE_ID)
+        }
+
+        logger.info("Manual trigger logic: Current time is {}. Cutoff is {}. Target date for fetching is set to {}.", nowInKorea, cutoffTime, targetDate)
+
         try {
-            logger.info("Triggering fetchShortTermForecastsTask manually.")
-            weatherScheduler.fetchShortTermForecastsTask()
-            logger.info("Triggering fetchMidTermForecastsTask manually.")
-            weatherScheduler.fetchMidTermForecastsTask()
-            val message = "단기 및 중기 예보 가져오기 스케줄러 작업이 수동으로 실행 요청되었습니다. 처리 결과는 서버 로그를 확인해주세요."
+            logger.info("Triggering runFetchShortTermForecasts manually for date: {}", targetDate)
+            weatherScheduler.runFetchShortTermForecasts(targetDate)
+
+            logger.info("Triggering runFetchMidTermForecasts manually for date: {}", targetDate)
+            weatherScheduler.runFetchMidTermForecasts(targetDate)
+
+            val message = "단기 및 중기 예보 가져오기 작업이 수동으로 실행 요청되었습니다. (기준일: $targetDate) 처리 결과는 서버 로그를 확인해주세요."
             logger.info(message)
             return ResponseEntity.ok(message)
         } catch (e: Exception) {
-            logger.error("Error during manual trigger of weather tasks: {}", e.message, e)
+            logger.error("Error during manual trigger of weather tasks for date {}: {}", targetDate, e.message, e)
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("날씨 스케줄러 작업 실행 중 오류가 발생했습니다: ${e.message}")
         }
