@@ -1,14 +1,15 @@
 package com.company.rest.api.config
 
-import com.google.auth.oauth2.GoogleCredentials
+import java.io.IOException
+import org.slf4j.LoggerFactory
+import java.io.FileInputStream
+import jakarta.annotation.PostConstruct
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
-import jakarta.annotation.PostConstruct
-import org.slf4j.LoggerFactory
+import com.google.auth.oauth2.GoogleCredentials
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.io.ClassPathResource
-import java.io.IOException
+
 
 @Configuration
 class FirebaseConfig {
@@ -21,12 +22,10 @@ class FirebaseConfig {
         try {
             // FirebaseApp이 이미 초기화되지 않았을 경우에만 초기화 진행
             if (FirebaseApp.getApps().isEmpty()) {
-                val serviceAccount = ClassPathResource(firebaseSdkPath).inputStream
+                val serviceAccount = FileInputStream(firebaseSdkPath)
 
                 val options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                    // 만약 Firebase Realtime Database 또는 다른 Firebase 서비스를 사용한다면,
-                    // .setDatabaseUrl("https://<YOUR_PROJECT_ID>.firebaseio.com") 등을 추가할 수 있습니다.
                     .build()
 
                 FirebaseApp.initializeApp(options)
