@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.util.Collections
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
@@ -57,7 +57,8 @@ class ChatService(
         val messagesSlice: Slice<ChatMessage>
 
         if (beforeTimestamp != null) {
-            val cursorLocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(beforeTimestamp), ZoneId.systemDefault())
+            val cursorLocalDateTime =
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(beforeTimestamp), ZoneId.systemDefault())
             logger.debug("Fetching messages before: {}", cursorLocalDateTime)
             messagesSlice = chatMessageRepository.findMessagesBetweenUsersBefore(
                 currentUser,
@@ -121,7 +122,11 @@ class ChatService(
         val receiverUid = chatMessageDto.receiverUid
 
         if (actualSenderUid.isBlank() || receiverUid == null || receiverUid.isBlank()) {
-            logger.warn("processNewMessage: Sender or Receiver UID is missing. Sender: {}, Receiver: {}", actualSenderUid, receiverUid)
+            logger.warn(
+                "processNewMessage: Sender or Receiver UID is missing. Sender: {}, Receiver: {}",
+                actualSenderUid,
+                receiverUid
+            )
             return
         }
 
@@ -129,7 +134,11 @@ class ChatService(
         val receiverOptional = userRepository.findById(receiverUid)
 
         if (senderOptional.isEmpty || receiverOptional.isEmpty) {
-            logger.warn("processNewMessage: Sender or Receiver not found in DB. SenderUID: {}, ReceiverUID: {}", actualSenderUid, receiverUid)
+            logger.warn(
+                "processNewMessage: Sender or Receiver not found in DB. SenderUID: {}, ReceiverUID: {}",
+                actualSenderUid,
+                receiverUid
+            )
             return
         }
         val sender = senderOptional.get()
@@ -151,8 +160,10 @@ class ChatService(
             readAt = if (isReceiverActive) LocalDateTime.now() else null
         )
         val savedMessageEntity = chatMessageRepository.save(chatMessageEntity)
-        logger.info("processNewMessage: Message ID {} saved. From: {}, To: {}. isRead set to: {}",
-            savedMessageEntity.id, sender.uid, receiver.uid, savedMessageEntity.isRead)
+        logger.info(
+            "processNewMessage: Message ID {} saved. From: {}, To: {}. isRead set to: {}",
+            savedMessageEntity.id, sender.uid, receiver.uid, savedMessageEntity.isRead
+        )
 
 
         val messageToSendDto = ChatMessageDto(
@@ -172,7 +183,11 @@ class ChatService(
                 "/queue/private",
                 messageToSendDto
             )
-            logger.info("processNewMessage: Message ID {} sent via WebSocket to online user UID: {}", savedMessageEntity.id, receiver.uid)
+            logger.info(
+                "processNewMessage: Message ID {} sent via WebSocket to online user UID: {}",
+                savedMessageEntity.id,
+                receiver.uid
+            )
         } else {
             logger.info("processNewMessage: Receiver UID: {} is offline. Checking conditions for FCM.", receiver.uid)
             val resultSlice = chatMessageRepository.findLatestMessageTimeBetweenUsersBefore(
@@ -187,7 +202,11 @@ class ChatService(
             if (lastInteractionTime == null || lastInteractionTime.isBefore(fiveMinutesAgo)) {
                 val conversationId = createCanonicalConversationId(sender.uid, receiver.uid)
                 if (!fcmSentForOfflineConversation.contains(conversationId)) {
-                    logger.info("processNewMessage: Receiver UID: {} is offline AND last interaction was >5 mins ago (or first message). Sending FCM for conversationId: {}.", receiver.uid, conversationId)
+                    logger.info(
+                        "processNewMessage: Receiver UID: {} is offline AND last interaction was >5 mins ago (or first message). Sending FCM for conversationId: {}.",
+                        receiver.uid,
+                        conversationId
+                    )
 
                     receiver.fcmToken?.let { token ->
                         if (token.isNotBlank()) {
@@ -205,16 +224,35 @@ class ChatService(
                                 )
                             )
                             fcmSentForOfflineConversation.add(conversationId)
-                            logger.info("processNewMessage: FCM sent for conversationId: {} and marked as sent.", conversationId)
+                            logger.info(
+                                "processNewMessage: FCM sent for conversationId: {} and marked as sent.",
+                                conversationId
+                            )
                         } else {
-                            logger.warn("processNewMessage: Receiver UID {} has a blank FCM token. Cannot send FCM for conversationId: {}.", receiver.uid, conversationId)
+                            logger.warn(
+                                "processNewMessage: Receiver UID {} has a blank FCM token. Cannot send FCM for conversationId: {}.",
+                                receiver.uid,
+                                conversationId
+                            )
                         }
-                    } ?: logger.warn("processNewMessage: Receiver UID {} has no FCM token. Cannot send FCM for conversationId: {}.", receiver.uid, conversationId)
+                    } ?: logger.warn(
+                        "processNewMessage: Receiver UID {} has no FCM token. Cannot send FCM for conversationId: {}.",
+                        receiver.uid,
+                        conversationId
+                    )
                 } else {
-                    logger.info("processNewMessage: FCM for conversationId: {} was already sent recently for this offline period. Suppressing new FCM for message ID {}.", conversationId, savedMessageEntity.id)
+                    logger.info(
+                        "processNewMessage: FCM for conversationId: {} was already sent recently for this offline period. Suppressing new FCM for message ID {}.",
+                        conversationId,
+                        savedMessageEntity.id
+                    )
                 }
             } else {
-                logger.info("processNewMessage: Receiver UID: {} is offline BUT last interaction was within 5 mins. FCM not sent for message ID {}.", receiver.uid, savedMessageEntity.id)
+                logger.info(
+                    "processNewMessage: Receiver UID: {} is offline BUT last interaction was within 5 mins. FCM not sent for message ID {}.",
+                    receiver.uid,
+                    savedMessageEntity.id
+                )
             }
         }
 
@@ -223,7 +261,11 @@ class ChatService(
             "/queue/private",
             messageToSendDto
         )
-        logger.info("processNewMessage: Sent message feedback (ID {}) to sender UID: {}", savedMessageEntity.id, sender.uid)
+        logger.info(
+            "processNewMessage: Sent message feedback (ID {}) to sender UID: {}",
+            savedMessageEntity.id,
+            sender.uid
+        )
     }
 
     @Transactional
@@ -245,7 +287,11 @@ class ChatService(
         val unreadMessages = chatMessageRepository.findByReceiverAndSenderAndIsReadFalse(readerUser, partnerUser)
 
         if (unreadMessages.isEmpty()) {
-            logger.info("No unread messages from partner {} to reader {}. Nothing to mark as read.", partnerUid, readerUid)
+            logger.info(
+                "No unread messages from partner {} to reader {}. Nothing to mark as read.",
+                partnerUid,
+                readerUid
+            )
             return
         }
 
@@ -270,14 +316,21 @@ class ChatService(
 
         val conversationId = createCanonicalConversationId(partnerUid, readerUid)
         if (fcmSentForOfflineConversation.remove(conversationId)) {
-            logger.info("markMessageAsRead: FCM sent flag cleared for conversationId: {} because receiver read messages.", conversationId)
+            logger.info(
+                "markMessageAsRead: FCM sent flag cleared for conversationId: {} because receiver read messages.",
+                conversationId
+            )
         }
     }
 
     @Transactional(readOnly = true)
-    fun handleUserJoin(chatMessageDto: ChatMessageDto, senderPrincipalName: String?, sessionAttributes: MutableMap<String, Any>) {
+    fun handleUserJoin(
+        chatMessageDto: ChatMessageDto,
+        senderPrincipalName: String?,
+        sessionAttributes: MutableMap<String, Any>
+    ) {
         val actualSenderUid = senderPrincipalName ?: chatMessageDto.senderUid
-        if (actualSenderUid.isBlank()){
+        if (actualSenderUid.isBlank()) {
             logger.warn("handleUserJoin: Sender UID is missing.")
             return
         }
@@ -307,13 +360,19 @@ class ChatService(
 
         val message = chatMessageRepository.findById(messageId)
             .orElseThrow {
-                logger.warn("deleteMessage: Message not found with ID: {} for delete attempt by user UID: {}", messageId, currentUserUid)
+                logger.warn(
+                    "deleteMessage: Message not found with ID: {} for delete attempt by user UID: {}",
+                    messageId,
+                    currentUserUid
+                )
                 throw CustomException(ErrorCode.MESSAGE_NOT_FOUND)
             }
 
         if (message.sender.uid != currentUserUid) {
-            logger.warn("deleteMessage: User UID: {} attempted to delete message ID: {} not owned by them (owner: {}). Forbidden.",
-                currentUserUid, messageId, message.sender.uid)
+            logger.warn(
+                "deleteMessage: User UID: {} attempted to delete message ID: {} not owned by them (owner: {}). Forbidden.",
+                currentUserUid, messageId, message.sender.uid
+            )
             throw CustomException(ErrorCode.FORBIDDEN_MESSAGE_ACCESS)
         }
 

@@ -27,25 +27,37 @@ class ChatController(
         val senderActualUid: String? = principal?.name
 
         if (senderActualUid == null) {
-            logger.warn("Controller: sendMessage - Principal or sender UID is null. Cannot process message from accessor user: {}", principal)
+            logger.warn(
+                "Controller: sendMessage - Principal or sender UID is null. Cannot process message from accessor user: {}",
+                principal
+            )
             if (chatMessageDto.senderUid.isNotBlank()) {
-                logger.warn("Controller: sendMessage - Attempting to use senderUid from DTO as fallback: {}", chatMessageDto.senderUid)
+                logger.warn(
+                    "Controller: sendMessage - Attempting to use senderUid from DTO as fallback: {}",
+                    chatMessageDto.senderUid
+                )
             } else {
                 logger.error("Controller: sendMessage - Critical: senderActualUid is null AND chatMessageDto.senderUid is blank.")
                 return
             }
         }
 
-        logger.info("Controller: Received /chat.sendMessage. Authenticated Principal UID (senderActualUid): {}, DTO Sender UID: {}, Content: '{}', To Receiver UID: {}",
+        logger.info(
+            "Controller: Received /chat.sendMessage. Authenticated Principal UID (senderActualUid): {}, DTO Sender UID: {}, Content: '{}', To Receiver UID: {}",
             senderActualUid,
             chatMessageDto.senderUid,
             chatMessageDto.content?.take(20),
-            chatMessageDto.receiverUid)
+            chatMessageDto.receiverUid
+        )
 
         val finalSenderUidForService = senderActualUid ?: chatMessageDto.senderUid
 
         if (finalSenderUidForService.isBlank()) {
-            logger.error("Controller: sendMessage - finalSenderUidForService is blank. Aborting. senderActualUid: {}, dto.senderUid: {}", senderActualUid, chatMessageDto.senderUid)
+            logger.error(
+                "Controller: sendMessage - finalSenderUidForService is blank. Aborting. senderActualUid: {}, dto.senderUid: {}",
+                senderActualUid,
+                chatMessageDto.senderUid
+            )
             return
         }
 
@@ -61,13 +73,18 @@ class ChatController(
         val senderActualUid: String? = principal?.name
 
         if (senderActualUid == null) {
-            logger.warn("Controller: addUser - Principal or sender UID is null. DTO senderUid: {}", chatMessageDto.senderUid)
+            logger.warn(
+                "Controller: addUser - Principal or sender UID is null. DTO senderUid: {}",
+                chatMessageDto.senderUid
+            )
             return
         }
         val sessionAttributes = headerAccessor.sessionAttributes ?: mutableMapOf()
 
-        logger.info("Controller: Received /chat.addUser. Authenticated Principal UID (senderActualUid): {}, DTO Sender Nickname: {}",
-            senderActualUid, chatMessageDto.senderNickname)
+        logger.info(
+            "Controller: Received /chat.addUser. Authenticated Principal UID (senderActualUid): {}, DTO Sender Nickname: {}",
+            senderActualUid, chatMessageDto.senderNickname
+        )
 
         chatService.handleUserJoin(chatMessageDto, senderActualUid, sessionAttributes)
     }
@@ -123,8 +140,10 @@ class ChatController(
             return
         }
 
-        logger.info("Controller: Received /chat.messageRead from User UID (readerActualUid): {}: partnerUid={}",
-            readerActualUid, readEventDto.partnerUid)
+        logger.info(
+            "Controller: Received /chat.messageRead from User UID (readerActualUid): {}: partnerUid={}",
+            readerActualUid, readEventDto.partnerUid
+        )
 
         chatService.markMessageAsRead(readEventDto, readerActualUid)
     }

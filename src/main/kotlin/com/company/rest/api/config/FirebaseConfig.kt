@@ -42,7 +42,10 @@ class FirebaseConfig {
             }
         } catch (e: IOException) {
             logger.error("Error initializing Firebase Admin SDK with key '{}': {}", firebaseSdkKeyName, e.message, e)
-            throw RuntimeException("Failed to initialize Firebase Admin SDK. Please check the service account key file '$firebaseSdkKeyName' in the resources folder.", e)
+            throw RuntimeException(
+                "Failed to initialize Firebase Admin SDK. Please check the service account key file '$firebaseSdkKeyName' in the resources folder.",
+                e
+            )
         }
     }
 }

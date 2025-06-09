@@ -6,7 +6,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.stereotype.Service
 import org.springframework.web.socket.messaging.SessionConnectedEvent
 import org.springframework.web.socket.messaging.SessionDisconnectEvent
-import java.util.Collections
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
@@ -30,9 +30,17 @@ class WebSocketPresenceService(
             val userUidFromAttribute = accessor.sessionAttributes?.get(userUidSessionAttributeKey) as? String
             if (userUidFromAttribute != null) {
                 connectedUserUids.add(userUidFromAttribute)
-                logger.info("WebSocket User Connected (via session attribute as fallback): {}. SessionId: {}", userUidFromAttribute, accessor.sessionId)
+                logger.info(
+                    "WebSocket User Connected (via session attribute as fallback): {}. SessionId: {}",
+                    userUidFromAttribute,
+                    accessor.sessionId
+                )
             } else {
-                logger.warn("WebSocket session connected, but user principal/UID is null and also not found in session attributes. SessionId: {}. Message: {}", accessor.sessionId, event.message)
+                logger.warn(
+                    "WebSocket session connected, but user principal/UID is null and also not found in session attributes. SessionId: {}. Message: {}",
+                    accessor.sessionId,
+                    event.message
+                )
             }
         }
     }
@@ -44,7 +52,11 @@ class WebSocketPresenceService(
 
         event.user?.name?.let {
             userUidToRemove = it
-            logger.info("WebSocket User Disconnected (identified by Principal): {}. SessionId: {}", userUidToRemove, sessionId)
+            logger.info(
+                "WebSocket User Disconnected (identified by Principal): {}. SessionId: {}",
+                userUidToRemove,
+                sessionId
+            )
         }
 
         if (userUidToRemove == null) {
@@ -54,11 +66,19 @@ class WebSocketPresenceService(
                 if (attributes != null) {
                     (attributes[userUidSessionAttributeKey] as? String)?.let {
                         userUidToRemove = it
-                        logger.info("WebSocket User Disconnected (identified by session attribute): {}. SessionId: {}", userUidToRemove, sessionId)
+                        logger.info(
+                            "WebSocket User Disconnected (identified by session attribute): {}. SessionId: {}",
+                            userUidToRemove,
+                            sessionId
+                        )
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error accessing session attributes on disconnect for SessionId: {}. Might be a non-STOMP disconnect or very early disconnect. Error: {}", sessionId, e.message)
+                logger.warn(
+                    "Error accessing session attributes on disconnect for SessionId: {}. Might be a non-STOMP disconnect or very early disconnect. Error: {}",
+                    sessionId,
+                    e.message
+                )
             }
         }
 
@@ -73,9 +93,16 @@ class WebSocketPresenceService(
                 webSocketActivityService.userDisconnected(uid)
 
             } else {
-                logger.warn("Attempted to remove user {} from connectedUserUids set, but was not present. SessionId: {}", uid, event.sessionId)
+                logger.warn(
+                    "Attempted to remove user {} from connectedUserUids set, but was not present. SessionId: {}",
+                    uid,
+                    event.sessionId
+                )
             }
-        } ?: logger.warn("WebSocket session disconnected (SessionId: {}), but could not identify userUid to remove from presence set. User might not have fully authenticated via STOMP.", sessionId)
+        } ?: logger.warn(
+            "WebSocket session disconnected (SessionId: {}), but could not identify userUid to remove from presence set. User might not have fully authenticated via STOMP.",
+            sessionId
+        )
     }
 
     fun isUserOnline(userUid: String): Boolean {
