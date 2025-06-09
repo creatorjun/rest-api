@@ -191,7 +191,7 @@ class WeatherService(
                 )
             }
 
-        if (logEntry.apiCallStatus == WeatherApiCallStatus.SUCCESS && logEntry.id != null) {
+        if (logEntry.apiCallStatus == WeatherApiCallStatus.SUCCESS) {
             logger.info(
                 "Mid-term forecast for {} ({}) with baseTmFc={} already successfully processed. Skipping.",
                 cityName,
@@ -201,10 +201,8 @@ class WeatherService(
             return
         }
 
-        if (logEntry.id != null) {
-            dailyWeatherForecastRepository.deleteAllByLogEntry(logEntry)
-            logEntry.dailyForecasts.clear()
-        }
+        dailyWeatherForecastRepository.deleteAllByLogEntry(logEntry)
+        logEntry.dailyForecasts.clear()
 
         logEntry.apiCallStatus = WeatherApiCallStatus.PENDING
         logEntry.updatedAt = LocalDateTime.now()

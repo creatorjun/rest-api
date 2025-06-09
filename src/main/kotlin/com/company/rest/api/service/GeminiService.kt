@@ -220,21 +220,8 @@ class GeminiService(
             if (isValidJson(potentialJson)) return potentialJson
         }
 
-        val firstBracket = rawResponse.indexOf('[')
-        val lastBracket = rawResponse.lastIndexOf(']')
-        if (firstBracket != -1 && lastBracket != -1 && lastBracket > firstBracket) {
-            val potentialJsonArray = rawResponse.substring(firstBracket, lastBracket + 1)
-        }
-
-
-        logger.warn(
-            "Could not reliably extract JSON object from the raw response. Raw (first 300 chars): ${
-                rawResponse.take(
-                    300
-                )
-            }"
-        )
-        return null // JSON 객체를 찾지 못한 경우 null 반환
+        logger.warn("Could not reliably extract JSON object from the raw response. Raw (first 300 chars): ${rawResponse.take(300)}")
+        return null
     }
 
     private fun isValidJson(jsonString: String): Boolean {
