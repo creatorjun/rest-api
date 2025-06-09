@@ -220,7 +220,13 @@ class GeminiService(
             if (isValidJson(potentialJson)) return potentialJson
         }
 
-        logger.warn("Could not reliably extract JSON object from the raw response. Raw (first 300 chars): ${rawResponse.take(300)}")
+        logger.warn(
+            "Could not reliably extract JSON object from the raw response. Raw (first 300 chars): ${
+                rawResponse.take(
+                    300
+                )
+            }"
+        )
         return null
     }
 

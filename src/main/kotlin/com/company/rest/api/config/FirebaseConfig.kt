@@ -36,7 +36,12 @@ class FirebaseConfig {
                 logger.info("Firebase Admin SDK already initialized.")
             }
         } catch (e: IOException) {
-            logger.error("Error initializing Firebase Admin SDK with key from path '{}': {}", firebaseSdkPath, e.message, e)
+            logger.error(
+                "Error initializing Firebase Admin SDK with key from path '{}': {}",
+                firebaseSdkPath,
+                e.message,
+                e
+            )
             // 에러 메시지도 외부 경로를 확인하도록 수정
             throw RuntimeException(
                 "Failed to initialize Firebase Admin SDK. Please check the service account key file path specified in your environment configuration: '$firebaseSdkPath'",
