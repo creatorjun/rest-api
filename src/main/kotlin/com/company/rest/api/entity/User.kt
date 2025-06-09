@@ -3,12 +3,14 @@ package com.company.rest.api.entity
 import com.company.rest.api.dto.LoginProvider
 import jakarta.persistence.*
 import java.time.LocalDateTime
-import java.util.UUID
+import java.util.*
 
 @Entity
-@Table(name = "app_users", uniqueConstraints = [
-    UniqueConstraint(name = "uk_user_provider_id_login_provider", columnNames = ["provider_id", "loginProvider"])
-])
+@Table(
+    name = "app_users", uniqueConstraints = [
+        UniqueConstraint(name = "uk_user_provider_id_login_provider", columnNames = ["provider_id", "loginProvider"])
+    ]
+)
 data class User(
 
     @Id

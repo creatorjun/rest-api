@@ -11,14 +11,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.format.annotation.DateTimeFormat
-import org.springframework.http.ResponseEntity
 import org.springframework.http.HttpStatus
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -43,7 +38,10 @@ class WeatherController(
         responses = [
             ApiResponse(
                 responseCode = "200", description = "주간 예보 조회 성공",
-                content = [Content(mediaType = "application/json", schema = Schema(implementation = WeeklyForecastResponseDto::class))]
+                content = [Content(
+                    mediaType = "application/json",
+                    schema = Schema(implementation = WeeklyForecastResponseDto::class)
+                )]
             ),
             ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 유효하지 않은 날짜 형식)"),
             ApiResponse(responseCode = "404", description = "해당 도시의 예보를 찾을 수 없음 (잘못된 도시 이름 또는 데이터 없음)")
@@ -53,12 +51,20 @@ class WeatherController(
     fun getWeeklyForecastByCityName(
         @Parameter(description = "조회할 도시 이름 (예: 서울, 부산)", required = true, example = "서울")
         @PathVariable cityName: String,
-        @Parameter(description = "조회 시작 날짜 (YYYY-MM-DD 형식). 제공하지 않으면 오늘 날짜 기준.", required = false, example = "2025-06-04")
+        @Parameter(
+            description = "조회 시작 날짜 (YYYY-MM-DD 형식). 제공하지 않으면 오늘 날짜 기준.",
+            required = false,
+            example = "2025-06-04"
+        )
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         date: LocalDate?
     ): ResponseEntity<WeeklyForecastResponseDto> {
         val startDate = date ?: LocalDate.now(KOREA_ZONE_ID)
-        logger.info("Request received for weekly forecast by city name. CityName: {}, StartDate: {}", cityName, startDate)
+        logger.info(
+            "Request received for weekly forecast by city name. CityName: {}, StartDate: {}",
+            cityName,
+            startDate
+        )
 
         val weeklyForecastDto = weatherService.getWeeklyForecastsByCityName(cityName, startDate)
 
@@ -96,7 +102,12 @@ class WeatherController(
             LocalDate.now(KOREA_ZONE_ID)
         }
 
-        logger.info("Manual trigger logic: Current time is {}. Cutoff is {}. Target date for fetching is set to {}.", nowInKorea, cutoffTime, targetDate)
+        logger.info(
+            "Manual trigger logic: Current time is {}. Cutoff is {}. Target date for fetching is set to {}.",
+            nowInKorea,
+            cutoffTime,
+            targetDate
+        )
 
         try {
             logger.info("Triggering runFetchShortTermForecasts manually for date: {}", targetDate)

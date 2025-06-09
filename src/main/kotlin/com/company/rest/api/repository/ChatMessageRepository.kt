@@ -28,22 +28,14 @@ interface ChatMessageRepository : JpaRepository<ChatMessage, String> {
     ): List<ChatMessage>
 
 
-    @Modifying
-    @Query("""
-        UPDATE ChatMessage cm 
-        SET cm.isRead = true, cm.readAt = :readTime 
-        WHERE cm.receiver = :receiver 
-          AND cm.sender = :sender 
-          AND cm.isRead = false 
-          AND cm.createdAt <= :untilCreatedAt 
-    """)
-    fun markMessagesAsRead(
-        @Param("receiver") receiver: User,
-        @Param("sender") sender: User,
-        @Param("readTime") readTime: LocalDateTime,
-        @Param("untilCreatedAt") untilCreatedAt: LocalDateTime
-    ): Int
+    fun findByReceiverAndSenderAndIsReadFalse(receiver: User, sender: User): List<ChatMessage>
 
+    @Modifying
+    @Query("UPDATE ChatMessage cm SET cm.isRead = true, cm.readAt = :readTime WHERE cm.id IN :messageIds")
+    fun markMessagesAsReadByIds(
+        @Param("messageIds") messageIds: List<String>,
+        @Param("readTime") readTime: LocalDateTime
+    ): Int
 
     fun countByReceiverAndIsReadFalse(receiver: User): Long
 
@@ -112,9 +104,9 @@ interface ChatMessageRepository : JpaRepository<ChatMessage, String> {
         WHERE (cm.sender = :user1 AND cm.receiver = :user2)
            OR (cm.sender = :user2 AND cm.receiver = :user1)
     """)
+    // 위 쿼리에서 오타를 수정했습니다. (r -> cm.receiver)
     fun deleteAllMessagesBetweenUsers(@Param("user1") user1: User, @Param("user2") user2: User)
 
-    // 특정 사용자가 보내거나 받은 모든 메시지를 삭제하는 메소드 추가
     @Modifying
     @Query("DELETE FROM ChatMessage cm WHERE cm.sender = :user OR cm.receiver = :user")
     fun deleteAllBySenderOrReceiver(@Param("user") user: User): Int

@@ -2,7 +2,7 @@ package com.company.rest.api.entity
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
-import java.util.UUID
+import java.util.*
 
 @Entity
 @Table(name = "chat_messages")
@@ -12,11 +12,21 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sender_uid", nullable = false, updatable = false, foreignKey = ForeignKey(name = "fk_chatmessage_sender_uid"))
+    @JoinColumn(
+        name = "sender_uid",
+        nullable = false,
+        updatable = false,
+        foreignKey = ForeignKey(name = "fk_chatmessage_sender_uid")
+    )
     val sender: User,
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receiver_uid", nullable = false, updatable = false, foreignKey = ForeignKey(name = "fk_chatmessage_receiver_uid"))
+    @JoinColumn(
+        name = "receiver_uid",
+        nullable = false,
+        updatable = false,
+        foreignKey = ForeignKey(name = "fk_chatmessage_receiver_uid")
+    )
     val receiver: User,
 
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")

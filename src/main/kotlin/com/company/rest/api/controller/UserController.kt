@@ -1,45 +1,31 @@
 package com.company.rest.api.controller
 
-import com.company.rest.api.dto.AppPasswordRemoveRequestDto
-import com.company.rest.api.dto.AppPasswordVerificationRequestDto
-import com.company.rest.api.dto.AppPasswordVerificationResponseDto
-import com.company.rest.api.dto.FcmTokenRequestDto
-import com.company.rest.api.dto.UserAccountUpdateRequestDto
-import com.company.rest.api.dto.UserAccountUpdateResponseDto
+import com.company.rest.api.dto.*
+import com.company.rest.api.exception.CustomException
+import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.service.UserService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
-// import io.swagger.v3.oas.annotations.enums.ParameterIn // ParameterIn은 여기서는 직접 사용 안 함
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.web.bind.annotation.DeleteMapping
-import org.springframework.web.bind.annotation.PatchMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.bind.annotation.*
+import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
 @RequestMapping("/api/v1/users")
-@Tag(name = "Users", description = "사용자 관련 API (FCM 토큰, 앱 비밀번호, 계정 정보, 파트너 관계, 계정 삭제 등)") // Tag 설명 업데이트
+@Tag(name = "Users", description = "사용자 관련 API (FCM 토큰, 앱 비밀번호, 계정 정보, 파트너 관계, 계정 삭제 등)")
 @SecurityRequirement(name = "bearerAuth")
 class UserController(
     private val userService: UserService
 ) {
     private val logger = LoggerFactory.getLogger(UserController::class.java)
-
-    // GET /api/v1/users/me 엔드포인트는 로그인 응답으로 정보가 통합되므로 삭제되었습니다.
 
     @PutMapping("/me/fcm-token")
     @Operation(
@@ -57,7 +43,7 @@ class UserController(
     ): ResponseEntity<Void> {
         if (userUid == null) {
             logger.warn("FCM token update attempt: User UID from @AuthenticationPrincipal is null.")
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 인증 정보를 찾을 수 없습니다.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
         }
         logger.info("User UID: {} attempting to update FCM token.", userUid)
         userService.updateFcmToken(userUid, fcmTokenRequestDto.fcmToken)
@@ -69,25 +55,28 @@ class UserController(
         summary = "앱 내 이중 인증 비밀번호 검증",
         description = "현재 인증된 사용자가 제공한 앱 비밀번호가 저장된 비밀번호와 일치하는지 검증합니다."
     )
-    @ApiResponse(responseCode = "200", description = "비밀번호 검증 성공", content = [Content(mediaType = "application/json", schema = Schema(implementation = AppPasswordVerificationResponseDto::class))])
+    @ApiResponse(
+        responseCode = "200",
+        description = "비밀번호 검증 성공",
+        content = [Content(
+            mediaType = "application/json",
+            schema = Schema(implementation = AppPasswordVerificationResponseDto::class)
+        )]
+    )
     @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 비밀번호 누락, 혹은 비밀번호 미설정 상태)")
-    @ApiResponse(responseCode = "401", description = "비밀번호 불일치 또는 인증 실패") // 인증 실패 케이스 추가
+    @ApiResponse(responseCode = "401", description = "비밀번호 불일치 또는 인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun verifyMyAppPassword(
         @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
         @Valid @SwaggerRequestBody @RequestBody requestDto: AppPasswordVerificationRequestDto
     ): ResponseEntity<AppPasswordVerificationResponseDto> {
         if (userUid == null) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 인증 정보를 찾을 수 없습니다.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
         }
-        val isVerified = userService.verifyAppPassword(userUid, requestDto.appPassword)
-        if (isVerified) {
-            return ResponseEntity.ok(AppPasswordVerificationResponseDto(isVerified = true, message = "앱 비밀번호가 확인되었습니다."))
-        } else {
-            // UserService.verifyAppPassword에서 비밀번호 불일치 시 false를 반환
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(AppPasswordVerificationResponseDto(isVerified = false, message = "앱 비밀번호가 일치하지 않습니다."))
-        }
+        // 이제 service에서 성공 시 true를, 실패 시 예외를 던지므로, 반환값을 확인할 필요가 없음
+        userService.verifyAppPassword(userUid, requestDto.appPassword)
+        // 예외가 발생하지 않았다면 성공한 것임
+        return ResponseEntity.ok(AppPasswordVerificationResponseDto(isVerified = true, message = "앱 비밀번호가 확인되었습니다."))
     }
 
     @PatchMapping("/me")
@@ -101,7 +90,14 @@ class UserController(
             `newAppPassword` 필드를 비워두거나 `null`로 보내면 앱 비밀번호는 변경되지 않습니다. (비밀번호 해제는 별도 DELETE API 사용)
             """
     )
-    @ApiResponse(responseCode = "200", description = "계정 정보 업데이트 성공", content = [Content(mediaType = "application/json", schema = Schema(implementation = UserAccountUpdateResponseDto::class))])
+    @ApiResponse(
+        responseCode = "200",
+        description = "계정 정보 업데이트 성공",
+        content = [Content(
+            mediaType = "application/json",
+            schema = Schema(implementation = UserAccountUpdateResponseDto::class)
+        )]
+    )
     @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 유효성 검사 실패 - 비밀번호 4자 미만 등)")
     @ApiResponse(responseCode = "401", description = "인증 실패 (예: 현재 앱 비밀번호 불일치)")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
@@ -111,7 +107,7 @@ class UserController(
         requestDto: UserAccountUpdateRequestDto
     ): ResponseEntity<UserAccountUpdateResponseDto> {
         if (userUid == null) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 인증 정보를 찾을 수 없습니다.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
         }
         val updatedUser = userService.updateUserAccount(userUid, requestDto)
         return ResponseEntity.ok(UserAccountUpdateResponseDto.fromUser(updatedUser))
@@ -124,7 +120,7 @@ class UserController(
     )
     @ApiResponse(responseCode = "204", description = "앱 비밀번호가 성공적으로 해제됨")
     @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 현재 비밀번호 누락, 혹은 비밀번호 미설정 상태)")
-    @ApiResponse(responseCode = "401", description = "현재 앱 비밀번호 불일치 또는 인증 실패") // 인증 실패 케이스 추가
+    @ApiResponse(responseCode = "401", description = "현재 앱 비밀번호 불일치 또는 인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun removeMyAppPassword(
         @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
@@ -133,7 +129,7 @@ class UserController(
     ): ResponseEntity<Void> {
         if (userUid == null) {
             logger.warn("App password removal attempt: User UID from @AuthenticationPrincipal is null.")
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 인증 정보를 찾을 수 없습니다.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
         }
         userService.removeAppPassword(userUid, requestDto.currentAppPassword)
         return ResponseEntity.noContent().build()
@@ -141,7 +137,7 @@ class UserController(
 
     @DeleteMapping("/me/partner")
     @Operation(
-        summary = "파트너 관계 해제 및 해당 파트너와의 모든 대화 내역 삭제", // 설명 명확화
+        summary = "파트너 관계 해제 및 해당 파트너와의 모든 대화 내역 삭제",
         description = "현재 인증된 사용자의 파트너 관계를 해제하고, 해당 파트너와의 모든 채팅 메시지 기록을 삭제합니다."
     )
     @ApiResponse(responseCode = "204", description = "파트너 관계 및 대화 내역이 성공적으로 삭제됨")
@@ -152,13 +148,12 @@ class UserController(
     ): ResponseEntity<Void> {
         if (userUid == null) {
             logger.warn("Clear partner and chat history attempt: User UID from @AuthenticationPrincipal is null.")
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 인증 정보를 찾을 수 없습니다.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
         }
         userService.clearPartnerAndChatHistory(userUid)
         return ResponseEntity.noContent().build()
     }
 
-    // 새로운 계정 전체 삭제 엔드포인트
     @DeleteMapping("/me")
     @Operation(
         summary = "내 계정 전체 삭제 (회원 탈퇴)",
@@ -172,7 +167,7 @@ class UserController(
     ): ResponseEntity<Void> {
         if (userUid == null) {
             logger.warn("Account deletion attempt: User UID from @AuthenticationPrincipal is null.")
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 인증 정보를 찾을 수 없습니다.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
         }
         logger.info("User UID: {} attempting to delete their account.", userUid)
         userService.deleteUserAccount(userUid)

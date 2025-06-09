@@ -1,23 +1,18 @@
 package com.company.rest.api.service
 
-import com.company.rest.api.dto.ChatMessageDto
-import com.company.rest.api.dto.MessageReadConfirmationDto
-import com.company.rest.api.dto.MessageReadEventDto
-import com.company.rest.api.dto.MessageType
-import com.company.rest.api.dto.PaginatedChatMessagesResponseDto
+import com.company.rest.api.dto.*
 import com.company.rest.api.entity.ChatMessage
-import com.company.rest.api.entity.User
+import com.company.rest.api.exception.CustomException
+import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.repository.ChatMessageRepository
 import com.company.rest.api.repository.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Pageable // Pageable 임포트 추가 (searchMessages 파라미터용)
+import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Slice
-import org.springframework.http.HttpStatus
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -27,10 +22,11 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class ChatService(
     private val userRepository: UserRepository,
-    private val chatMessageRepository: ChatMessageRepository, //
+    private val chatMessageRepository: ChatMessageRepository,
     private val messagingTemplate: SimpMessagingTemplate,
-    private val webSocketPresenceService: WebSocketPresenceService, //
-    private val fcmService: FcmService //
+    private val webSocketPresenceService: WebSocketPresenceService,
+    private val fcmService: FcmService,
+    private val webSocketActivityService: WebSocketActivityService // 의존성 주입
 ) {
     private val logger = LoggerFactory.getLogger(ChatService::class.java)
 
@@ -47,16 +43,15 @@ class ChatService(
         beforeTimestamp: Long?,
         size: Int
     ): PaginatedChatMessagesResponseDto {
-        // ... (이전 코드와 동일) ...
         logger.info(
             "Fetching paginated messages for conversation between {} and {}. Before timestamp: {}, Size: {}",
             currentUserUid, otherUserUid, beforeTimestamp, size
         )
 
         val currentUser = userRepository.findById(currentUserUid)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "현재 사용자를 찾을 수 없습니다: $currentUserUid") }
+            .orElseThrow { throw CustomException(ErrorCode.USER_NOT_FOUND) }
         val otherUser = userRepository.findById(otherUserUid)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "대화 상대방 사용자를 찾을 수 없습니다: $otherUserUid") }
+            .orElseThrow { throw CustomException(ErrorCode.USER_NOT_FOUND) }
 
         val pageRequest = PageRequest.of(0, size)
         val messagesSlice: Slice<ChatMessage>
@@ -80,24 +75,15 @@ class ChatService(
         }
 
         logger.info("Found {} messages. Has next page: {}", messagesSlice.numberOfElements, messagesSlice.hasNext())
-        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice) //
+        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice)
     }
 
-    // --- 여기부터 새로운 검색 메소드 추가 ---
-    /**
-     * 특정 두 사용자 간의 대화 내용 중, 지정된 키워드를 포함하는 메시지를 검색합니다 (페이징 처리).
-     * @param currentUserUid 현재 요청을 보낸 사용자 UID
-     * @param otherUserUid 대화 상대방 사용자 UID
-     * @param keyword 검색할 키워드
-     * @param pageable 페이지 정보 (예: PageRequest.of(page, size))
-     * @return 페이징 처리된 검색 결과 메시지 목록과 다음 페이지 정보
-     */
     @Transactional(readOnly = true)
     fun searchMessages(
         currentUserUid: String,
         otherUserUid: String,
         keyword: String,
-        pageable: Pageable // 컨트롤러에서 Pageable 객체를 받아옴
+        pageable: Pageable
     ): PaginatedChatMessagesResponseDto {
         logger.info(
             "Searching messages between {} and {} with keyword '{}'. Page: {}, Size: {}",
@@ -105,37 +91,32 @@ class ChatService(
         )
 
         if (keyword.isBlank()) {
-            // 빈 키워드로 검색 요청 시, 빈 결과를 반환하거나 또는 에러 처리
-            // 여기서는 빈 결과를 포함하는 PaginatedChatMessagesResponseDto 반환
             logger.warn("Search keyword is blank for conversation between {} and {}.", currentUserUid, otherUserUid)
             return PaginatedChatMessagesResponseDto(emptyList(), false, null)
         }
 
         val currentUser = userRepository.findById(currentUserUid)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "현재 사용자를 찾을 수 없습니다: $currentUserUid") }
+            .orElseThrow { throw CustomException(ErrorCode.USER_NOT_FOUND) }
         val otherUser = userRepository.findById(otherUserUid)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "대화 상대방 사용자를 찾을 수 없습니다: $otherUserUid") }
+            .orElseThrow { throw CustomException(ErrorCode.USER_NOT_FOUND) }
 
-        // ChatMessageRepository에 추가한 searchMessagesBetweenUsers 메소드 호출
         val messagesSlice = chatMessageRepository.searchMessagesBetweenUsers(
             currentUser,
             otherUser,
-            keyword, // %keyword% 처리는 Repository의 JPQL에서 CONCAT으로 처리
+            keyword,
             pageable
-        ) //
+        )
 
         logger.info(
             "Search found {} messages for keyword '{}' between {} and {}. Has next page: {}",
             messagesSlice.numberOfElements, keyword, currentUserUid, otherUserUid, messagesSlice.hasNext()
         )
-        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice) // 기존 DTO 변환 로직 재활용
+        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice)
     }
-    // --- 새로운 검색 메소드 추가 끝 ---
 
 
     @Transactional
     fun processNewMessage(chatMessageDto: ChatMessageDto, senderPrincipalName: String?) {
-        // ... (이전 코드와 동일) ...
         val actualSenderUid = senderPrincipalName ?: chatMessageDto.senderUid
         val receiverUid = chatMessageDto.receiverUid
 
@@ -154,13 +135,25 @@ class ChatService(
         val sender = senderOptional.get()
         val receiver = receiverOptional.get()
 
+        // --- 바로 이 부분입니다! ---
+        // 1. 수신자가 현재 발신자와의 대화창을 보고 있는지 확인
+        val isReceiverActive = webSocketActivityService.isUserActiveInChat(
+            userUid = receiver.uid,
+            partnerUid = sender.uid
+        )
+
+        // 2. 활동 상태에 따라 isRead 값을 설정하여 엔티티 생성
         val chatMessageEntity = ChatMessage(
             sender = sender,
             receiver = receiver,
-            content = chatMessageDto.content ?: ""
+            content = chatMessageDto.content ?: "",
+            isRead = isReceiverActive, // 수신자가 활성 상태이면 true, 아니면 false
+            readAt = if (isReceiverActive) LocalDateTime.now() else null
         )
         val savedMessageEntity = chatMessageRepository.save(chatMessageEntity)
-        logger.info("processNewMessage: Message ID {} saved. From: {}, To: {}", savedMessageEntity.id, sender.uid, receiver.uid)
+        logger.info("processNewMessage: Message ID {} saved. From: {}, To: {}. isRead set to: {}",
+            savedMessageEntity.id, sender.uid, receiver.uid, savedMessageEntity.isRead)
+
 
         val messageToSendDto = ChatMessageDto(
             id = savedMessageEntity.id,
@@ -170,7 +163,7 @@ class ChatService(
             senderNickname = sender.nickname,
             receiverUid = receiver.uid,
             timestamp = savedMessageEntity.createdAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-            isRead = savedMessageEntity.isRead
+            isRead = savedMessageEntity.isRead // DB에 저장된 최종 isRead 상태 반영
         )
 
         if (webSocketPresenceService.isUserOnline(receiver.uid)) {
@@ -235,56 +228,54 @@ class ChatService(
 
     @Transactional
     fun markMessageAsRead(readEventDto: MessageReadEventDto, readerPrincipalName: String?) {
-        // ... (이전 코드와 동일) ...
         val readerUid = readerPrincipalName
         if (readerUid == null) {
             logger.warn("markMessageAsRead: User not authenticated. Cannot process read event: {}", readEventDto)
             return
         }
 
-        val messageOptional = chatMessageRepository.findById(readEventDto.messageId)
-        if (messageOptional.isEmpty) {
-            logger.warn("markMessageAsRead: Message with ID {} not found.", readEventDto.messageId)
+        val partnerUid = readEventDto.partnerUid
+        logger.info("User {} is marking all messages from partner {} as read.", readerUid, partnerUid)
+
+        val readerUser = userRepository.findById(readerUid)
+            .orElseThrow { CustomException(ErrorCode.USER_NOT_FOUND) }
+        val partnerUser = userRepository.findById(partnerUid)
+            .orElseThrow { CustomException(ErrorCode.USER_NOT_FOUND) }
+
+        val unreadMessages = chatMessageRepository.findByReceiverAndSenderAndIsReadFalse(readerUser, partnerUser)
+
+        if (unreadMessages.isEmpty()) {
+            logger.info("No unread messages from partner {} to reader {}. Nothing to mark as read.", partnerUid, readerUid)
             return
         }
-        val messageEntity = messageOptional.get()
 
-        if (messageEntity.receiver.uid != readerUid) {
-            logger.warn("markMessageAsRead: User UID: {} is not the receiver of message ID: {}. Forbidden.", readerUid, readEventDto.messageId)
-            return
-        }
+        val unreadMessageIds = unreadMessages.map { it.id }
+        val now = LocalDateTime.now()
 
-        if (!messageEntity.isRead) {
-            messageEntity.isRead = true
-            messageEntity.readAt = LocalDateTime.now()
-            val savedReadMessage = chatMessageRepository.save(messageEntity)
-            logger.info("markMessageAsRead: Message ID {} marked as read in DB for receiver UID: {}", savedReadMessage.id, readerUid)
+        val updatedCount = chatMessageRepository.markMessagesAsReadByIds(unreadMessageIds, now)
+        logger.info("Marked {} messages from partner {} to reader {} as read.", updatedCount, partnerUid, readerUid)
 
-            val originalSenderUid = savedReadMessage.sender.uid
-            val confirmationDto = MessageReadConfirmationDto(
-                messageId = savedReadMessage.id,
-                readerUid = readerUid,
-                readAt = savedReadMessage.readAt?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
-            )
-            messagingTemplate.convertAndSendToUser(
-                originalSenderUid,
-                "/queue/readReceipts",
-                confirmationDto
-            )
-            logger.info("markMessageAsRead: Sent read confirmation for message ID: {} to original sender UID: {}", savedReadMessage.id, originalSenderUid)
+        val confirmationDto = MessagesReadConfirmationDto(
+            updatedMessageIds = unreadMessageIds,
+            readerUid = readerUid,
+            readAt = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        )
 
-            val conversationId = createCanonicalConversationId(originalSenderUid, readerUid)
-            if (fcmSentForOfflineConversation.remove(conversationId)) {
-                logger.info("markMessageAsRead: FCM sent flag cleared for conversationId: {} because receiver read messages.", conversationId)
-            }
-        } else {
-            logger.info("markMessageAsRead: Message ID: {} was already marked as read.", readEventDto.messageId)
+        messagingTemplate.convertAndSendToUser(
+            partnerUid,
+            "/queue/readReceipts",
+            confirmationDto
+        )
+        logger.info("Sent bulk read confirmation for {} messages to original sender UID: {}", updatedCount, partnerUid)
+
+        val conversationId = createCanonicalConversationId(partnerUid, readerUid)
+        if (fcmSentForOfflineConversation.remove(conversationId)) {
+            logger.info("markMessageAsRead: FCM sent flag cleared for conversationId: {} because receiver read messages.", conversationId)
         }
     }
 
     @Transactional(readOnly = true)
     fun handleUserJoin(chatMessageDto: ChatMessageDto, senderPrincipalName: String?, sessionAttributes: MutableMap<String, Any>) {
-        // ... (이전 코드와 동일) ...
         val actualSenderUid = senderPrincipalName ?: chatMessageDto.senderUid
         if (actualSenderUid.isBlank()){
             logger.warn("handleUserJoin: Sender UID is missing.")
@@ -310,21 +301,20 @@ class ChatService(
         logger.info("handleUserJoin: Sent JOIN message to /topic/public for user: {}", senderNickname)
     }
 
-    // deleteMessage 메소드는 ChatService에 이미 존재한다고 가정 (이전 답변에서 추가)
     @Transactional
-    fun deleteMessage(currentUserUid: String, messageId: String) { //
+    fun deleteMessage(currentUserUid: String, messageId: String) {
         logger.info("User UID: {} attempting to delete message ID: {}", currentUserUid, messageId)
 
         val message = chatMessageRepository.findById(messageId)
             .orElseThrow {
                 logger.warn("deleteMessage: Message not found with ID: {} for delete attempt by user UID: {}", messageId, currentUserUid)
-                ResponseStatusException(HttpStatus.NOT_FOUND, "삭제할 메시지를 찾을 수 없습니다.")
+                throw CustomException(ErrorCode.MESSAGE_NOT_FOUND)
             }
 
         if (message.sender.uid != currentUserUid) {
             logger.warn("deleteMessage: User UID: {} attempted to delete message ID: {} not owned by them (owner: {}). Forbidden.",
                 currentUserUid, messageId, message.sender.uid)
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "해당 메시지를 삭제할 권한이 없습니다.")
+            throw CustomException(ErrorCode.FORBIDDEN_MESSAGE_ACCESS)
         }
 
         if (message.isDeleted) {

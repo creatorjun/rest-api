@@ -2,12 +2,14 @@ package com.company.rest.api.entity
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
-import java.util.UUID
+import java.util.*
 
 @Entity
-@Table(name = "weather_api_logs", uniqueConstraints = [
-    UniqueConstraint(name = "uk_weather_log_base_datetime_region", columnNames = ["base_date_time", "region_code"])
-])
+@Table(
+    name = "weather_api_logs", uniqueConstraints = [
+        UniqueConstraint(name = "uk_weather_log_base_datetime_region", columnNames = ["base_date_time", "region_code"])
+    ]
+)
 data class WeatherApiLog(
     @Id
     @Column(name = "id", unique = true, nullable = false, updatable = false)

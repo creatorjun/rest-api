@@ -3,12 +3,14 @@ package com.company.rest.api.entity
 import jakarta.persistence.*
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.util.UUID
+import java.util.*
 
 @Entity
-@Table(name = "daily_luck_logs", uniqueConstraints = [ // 테이블 이름 변경
-    UniqueConstraint(name = "uk_daily_luck_log_request_date", columnNames = ["request_date"])
-])
+@Table(
+    name = "daily_luck_logs", uniqueConstraints = [ // 테이블 이름 변경
+        UniqueConstraint(name = "uk_daily_luck_log_request_date", columnNames = ["request_date"])
+    ]
+)
 data class DailyLuckLog( // 클래스 이름 변경
     @Id
     @Column(name = "id", unique = true, nullable = false, updatable = false)

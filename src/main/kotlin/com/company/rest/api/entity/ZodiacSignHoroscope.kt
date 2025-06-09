@@ -1,7 +1,7 @@
 package com.company.rest.api.entity
 
 import jakarta.persistence.*
-import java.util.UUID
+import java.util.*
 
 @Entity
 @Table(name = "zodiac_sign_luck_entries") // 테이블 이름 변경
@@ -11,7 +11,11 @@ data class ZodiacSignLuck( // 클래스 이름 변경
     val id: String = UUID.randomUUID().toString(),
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "log_entry_id", nullable = false, foreignKey = ForeignKey(name = "fk_luck_entry_log_entry")) // ForeignKey 및 참조 컬럼명 변경
+    @JoinColumn(
+        name = "log_entry_id",
+        nullable = false,
+        foreignKey = ForeignKey(name = "fk_luck_entry_log_entry")
+    ) // ForeignKey 및 참조 컬럼명 변경
     var logEntry: DailyLuckLog? = null, // 부모 엔티티 타입 변경
 
     @Column(name = "zodiac_name", nullable = false)

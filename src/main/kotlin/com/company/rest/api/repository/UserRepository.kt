@@ -4,7 +4,7 @@ import com.company.rest.api.dto.LoginProvider
 import com.company.rest.api.entity.User
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
-import java.util.Optional
+import java.util.*
 
 @Repository
 interface UserRepository : JpaRepository<User, String> { // User의 PK는 String (uid)

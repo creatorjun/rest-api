@@ -4,7 +4,7 @@ import jakarta.persistence.*
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.util.UUID
+import java.util.*
 
 @Entity
 @Table(name = "events") // 테이블 이름 변경: memos -> events
@@ -14,7 +14,11 @@ data class Event( // 클래스 이름 변경: Memo -> Event
     val id: String = UUID.randomUUID().toString(),
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_uid", nullable = false, foreignKey = ForeignKey(name = "fk_event_user_uid")) // ForeignKey 이름 변경: fk_memo_user_uid -> fk_event_user_uid
+    @JoinColumn(
+        name = "user_uid",
+        nullable = false,
+        foreignKey = ForeignKey(name = "fk_event_user_uid")
+    ) // ForeignKey 이름 변경: fk_memo_user_uid -> fk_event_user_uid
     val user: User, // 작성자 정보
 
     @Column(name = "text", nullable = false, length = 1000)

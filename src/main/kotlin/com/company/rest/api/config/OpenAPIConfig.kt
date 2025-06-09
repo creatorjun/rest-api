@@ -7,7 +7,13 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme
 import org.springframework.context.annotation.Configuration
 
 @Configuration
-@OpenAPIDefinition(info = Info(title = "My REST API", version = "v1", description = "API documentation for My REST API"))
+@OpenAPIDefinition(
+    info = Info(
+        title = "My REST API",
+        version = "v1",
+        description = "API documentation for My REST API"
+    )
+)
 @SecurityScheme(
     name = "bearerAuth",
     type = SecuritySchemeType.HTTP,
@@ -15,4 +21,4 @@ import org.springframework.context.annotation.Configuration
     scheme = "bearer",
     description = "Enter JWT Bearer token",
 )
-class OpenApiConfig {}
+class OpenApiConfig

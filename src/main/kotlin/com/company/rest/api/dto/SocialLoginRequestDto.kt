@@ -1,5 +1,6 @@
 // src/main/kotlin/com/company/rest/api/dto/SocialLoginRequestDto.kt
 package com.company.rest.api.dto
+
 import jakarta.validation.constraints.NotBlank
 
 data class SocialLoginRequestDto(

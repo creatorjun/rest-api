@@ -1,15 +1,15 @@
 package com.company.rest.api.security
 
+// import org.springframework.security.core.userdetails.User // UserDetails 직접 사용 안 함
+// import org.springframework.security.core.userdetails.UserDetails // UserDetails 직접 사용 안 함
 import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
-// import org.springframework.security.core.userdetails.User // UserDetails 직접 사용 안 함
-// import org.springframework.security.core.userdetails.UserDetails // UserDetails 직접 사용 안 함
-import org.springframework.security.core.authority.SimpleGrantedAuthority // 권한 예시
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource
 import org.springframework.stereotype.Component
 import org.springframework.util.StringUtils
@@ -52,9 +52,15 @@ class JwtAuthenticationFilter(
                         )
                         authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
                         SecurityContextHolder.getContext().authentication = authentication
-                        filterLogger.info("JwtAuthenticationFilter: Successfully authenticated user UID '{}' (as String principal) and set SecurityContext.", userUid)
+                        filterLogger.info(
+                            "JwtAuthenticationFilter: Successfully authenticated user UID '{}' (as String principal) and set SecurityContext.",
+                            userUid
+                        )
                     } else {
-                        filterLogger.debug("JwtAuthenticationFilter: SecurityContextHolder already contains an authentication object for user '{}'. Skipping.", SecurityContextHolder.getContext().authentication.name)
+                        filterLogger.debug(
+                            "JwtAuthenticationFilter: SecurityContextHolder already contains an authentication object for user '{}'. Skipping.",
+                            SecurityContextHolder.getContext().authentication.name
+                        )
                     }
                 } else {
                     filterLogger.warn("JwtAuthenticationFilter: User UID could not be extracted from JWT, although token was considered valid.")

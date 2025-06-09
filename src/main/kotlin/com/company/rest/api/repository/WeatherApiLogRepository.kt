@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.time.LocalDateTime
-import java.util.Optional
+import java.util.*
 
 @Repository
 interface WeatherApiLogRepository : JpaRepository<WeatherApiLog, String> {
@@ -30,7 +30,10 @@ interface WeatherApiLogRepository : JpaRepository<WeatherApiLog, String> {
      * @param endDate 종료일시
      * @return List<WeatherApiLog>
      */
-    fun findByCreatedAtBetweenOrderByCreatedAtDesc(startDate: LocalDateTime, endDate: LocalDateTime): List<WeatherApiLog>
+    fun findByCreatedAtBetweenOrderByCreatedAtDesc(
+        startDate: LocalDateTime,
+        endDate: LocalDateTime
+    ): List<WeatherApiLog>
 
     /**
      * 특정 API 호출 상태(apiCallStatus)를 가진 WeatherApiLog 목록을 조회합니다.

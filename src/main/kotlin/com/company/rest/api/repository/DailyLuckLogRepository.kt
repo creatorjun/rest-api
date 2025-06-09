@@ -4,7 +4,7 @@ import com.company.rest.api.entity.DailyLuckLog
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 import java.time.LocalDate
-import java.util.Optional
+import java.util.*
 
 @Repository
 interface DailyLuckLogRepository : JpaRepository<DailyLuckLog, String> {

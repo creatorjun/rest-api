@@ -2,7 +2,7 @@ package com.company.rest.api.entity
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
-import java.util.UUID
+import java.util.*
 
 @Entity
 @Table(name = "partner_invitations")
@@ -12,7 +12,12 @@ data class PartnerInvitation(
     val id: String = UUID.randomUUID().toString(), // 고유한 초대 ID (예: UUID)
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "issuer_user_uid", nullable = false, updatable = false, foreignKey = ForeignKey(name = "fk_invitation_issuer_uid"))
+    @JoinColumn(
+        name = "issuer_user_uid",
+        nullable = false,
+        updatable = false,
+        foreignKey = ForeignKey(name = "fk_invitation_issuer_uid")
+    )
     val issuerUser: User, // 초대를 생성한 사용자
 
     @Column(name = "expires_at", nullable = false, updatable = false)

@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.time.LocalDateTime
-import java.util.Optional
+import java.util.*
 
 @Repository
 interface PartnerInvitationRepository : JpaRepository<PartnerInvitation, String> {
@@ -19,7 +19,10 @@ interface PartnerInvitationRepository : JpaRepository<PartnerInvitation, String>
      * @param now 현재 시간 (만료 여부 비교용)
      * @return Optional<PartnerInvitation>
      */
-    fun findByIssuerUserAndIsUsedFalseAndExpiresAtAfter(issuerUser: User, now: LocalDateTime): Optional<PartnerInvitation>
+    fun findByIssuerUserAndIsUsedFalseAndExpiresAtAfter(
+        issuerUser: User,
+        now: LocalDateTime
+    ): Optional<PartnerInvitation>
 
     /**
      * 초대 ID로 아직 사용되지 않았고 만료되지 않은 초대장을 찾습니다.

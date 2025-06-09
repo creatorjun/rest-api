@@ -23,7 +23,11 @@ class GeminiScheduler( // 클래스 이름은 유지 (Gemini 관련 스케줄러
         val currentTime = LocalDateTime.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
 
-        logger.info("Executing scheduled task: fetchDailyLuckTask for date {} at {} (Korea Time)", today, currentTime) // 로그 메시지 변경
+        logger.info(
+            "Executing scheduled task: fetchDailyLuckTask for date {} at {} (Korea Time)",
+            today,
+            currentTime
+        ) // 로그 메시지 변경
 
         try {
             // GeminiService의 변경된 메소드 호출
@@ -32,7 +36,12 @@ class GeminiScheduler( // 클래스 이름은 유지 (Gemini 관련 스케줄러
         } catch (e: Exception) {
             // GeminiService 내부에서 예외를 로깅하고 DB 상태를 업데이트하지만,
             // 스케줄러 레벨에서도 작업 실패를 인지하고 로깅할 수 있습니다.
-            logger.error("An unexpected error occurred during the scheduled fetchDailyLuckTask for date {}: {}", today, e.message, e) // 로그 메시지 변경
+            logger.error(
+                "An unexpected error occurred during the scheduled fetchDailyLuckTask for date {}: {}",
+                today,
+                e.message,
+                e
+            ) // 로그 메시지 변경
         }
     }
 }

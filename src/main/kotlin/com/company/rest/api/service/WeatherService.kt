@@ -10,19 +10,19 @@ import com.company.rest.api.dto.kma.MidTaResponseDto
 import com.company.rest.api.entity.DailyWeatherForecast
 import com.company.rest.api.entity.WeatherApiCallStatus
 import com.company.rest.api.entity.WeatherApiLog
+import com.company.rest.api.exception.CustomException
+import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.repository.DailyWeatherForecastRepository
 import com.company.rest.api.repository.WeatherApiLogRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.bodyToMono
-import org.springframework.web.server.ResponseStatusException
 import reactor.core.publisher.Mono
 import java.net.URI
 import java.net.URLEncoder
@@ -44,11 +44,13 @@ class WeatherService(
 
     @Value("\${weather.api.url}")
     private lateinit var midTermApiBaseUrl: String
+
     @Value("\${weather.api.key}")
     private lateinit var midTermApiKey: String
 
     @Value("\${village.api.url}")
     private lateinit var villageApiUrl: String
+
     @Value("\${village.api.key}")
     private lateinit var villageApiKey: String
 
@@ -80,14 +82,21 @@ class WeatherService(
         val regionDetails = regionInfoPair.second
 
         val endDate = startDate.plusDays(6) // startDate (D+0) 부터 D+6까지 총 7일간의 데이터 조회
-        val dailyForecastEntities = dailyWeatherForecastRepository.findByRegionCodeAndForecastDateBetweenOrderByForecastDateAsc(
-            regionCode,
-            startDate,
-            endDate
-        )
+        val dailyForecastEntities =
+            dailyWeatherForecastRepository.findByRegionCodeAndForecastDateBetweenOrderByForecastDateAsc(
+                regionCode,
+                startDate,
+                endDate
+            )
 
         if (dailyForecastEntities.isEmpty()) {
-            logger.warn("No forecast data found in DB for regionCode: {} (City: {}), from {} to {}", regionCode, cityName, startDate, endDate)
+            logger.warn(
+                "No forecast data found in DB for regionCode: {} (City: {}), from {} to {}",
+                regionCode,
+                cityName,
+                startDate,
+                endDate
+            )
             return null
         }
 
@@ -104,15 +113,19 @@ class WeatherService(
                     if (minTempForDto == null) {
                         minTempForDto = nextDayEntity.minTemp
                         if (minTempForDto != null) {
-                            logger.debug("Borrowed minTemp ({}) from next day ({}) for current day ({}) in region {}",
-                                minTempForDto, nextDayEntity.forecastDate, currentEntity.forecastDate, regionCode)
+                            logger.debug(
+                                "Borrowed minTemp ({}) from next day ({}) for current day ({}) in region {}",
+                                minTempForDto, nextDayEntity.forecastDate, currentEntity.forecastDate, regionCode
+                            )
                         }
                     }
                     if (maxTempForDto == null) {
                         maxTempForDto = nextDayEntity.maxTemp
                         if (maxTempForDto != null) {
-                            logger.debug("Borrowed maxTemp ({}) from next day ({}) for current day ({}) in region {}",
-                                maxTempForDto, nextDayEntity.forecastDate, currentEntity.forecastDate, regionCode)
+                            logger.debug(
+                                "Borrowed maxTemp ({}) from next day ({}) for current day ({}) in region {}",
+                                maxTempForDto, nextDayEntity.forecastDate, currentEntity.forecastDate, regionCode
+                            )
                         }
                     }
                 }
@@ -161,7 +174,13 @@ class WeatherService(
         val landFcstRegId = regionDetails.landFcstRegId
         val tmFc = baseDateTime.format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"))
 
-        logger.info("Attempting to fetch MID-TERM forecasts for {} (temp_reg_id={}), land_reg_id={}, baseTmFc={}", cityName, cityTempRegId, landFcstRegId, tmFc)
+        logger.info(
+            "Attempting to fetch MID-TERM forecasts for {} (temp_reg_id={}), land_reg_id={}, baseTmFc={}",
+            cityName,
+            cityTempRegId,
+            landFcstRegId,
+            tmFc
+        )
 
         var logEntry = weatherApiLogRepository.findByBaseDateTimeAndRegionCode(baseDateTime, cityTempRegId)
             .orElseGet {
@@ -173,7 +192,12 @@ class WeatherService(
             }
 
         if (logEntry.apiCallStatus == WeatherApiCallStatus.SUCCESS && logEntry.id != null) {
-            logger.info("Mid-term forecast for {} ({}) with baseTmFc={} already successfully processed. Skipping.", cityName, cityTempRegId, tmFc)
+            logger.info(
+                "Mid-term forecast for {} ({}) with baseTmFc={} already successfully processed. Skipping.",
+                cityName,
+                cityTempRegId,
+                tmFc
+            )
             return
         }
 
@@ -196,7 +220,12 @@ class WeatherService(
         )
             .doOnSubscribe { logger.debug("Fetching MidLandFcst for land_reg_id: {}, tmFc: {}", landFcstRegId, tmFc) }
             .onErrorResume { e ->
-                logger.error("Error fetching MidLandFcst for land_reg_id: {}, tmFc: {}: {}", landFcstRegId, tmFc, e.message)
+                logger.error(
+                    "Error fetching MidLandFcst for land_reg_id: {}, tmFc: {}: {}",
+                    landFcstRegId,
+                    tmFc,
+                    e.message
+                )
                 logEntry.apiCallStatus = WeatherApiCallStatus.API_ERROR_LAND
                 Mono.empty<MidLandFcstResponseDto>()
             }
@@ -225,36 +254,82 @@ class WeatherService(
                 val landResponse = tuple.t1
                 val tempResponse = tuple.t2
 
-                logEntry.rawResponseLand = if (landResponse.response?.body?.items?.item != null) objectMapper.writeValueAsString(landResponse) else null
-                logEntry.rawResponseTemp = if (tempResponse.response?.body?.items?.item != null) objectMapper.writeValueAsString(tempResponse) else null
+                logEntry.rawResponseLand =
+                    if (landResponse.response?.body?.items?.item != null) objectMapper.writeValueAsString(landResponse) else null
+                logEntry.rawResponseTemp =
+                    if (tempResponse.response?.body?.items?.item != null) objectMapper.writeValueAsString(tempResponse) else null
 
-                val landDataAvailable = isKmaResponseSuccess(landResponse) && landResponse.response?.body?.items?.item?.isNotEmpty() == true
-                val tempDataAvailable = isKmaResponseSuccess(tempResponse) && tempResponse.response?.body?.items?.item?.isNotEmpty() == true
+                val landDataAvailable =
+                    isKmaResponseSuccess(landResponse) && landResponse.response?.body?.items?.item?.isNotEmpty() == true
+                val tempDataAvailable =
+                    isKmaResponseSuccess(tempResponse) && tempResponse.response?.body?.items?.item?.isNotEmpty() == true
 
                 if (landDataAvailable && tempDataAvailable) {
                     try {
-                        parseAndSaveMidTermForecasts(logEntry, landResponse, tempResponse, baseDateTime.toLocalDate(), cityTempRegId, cityName)
+                        parseAndSaveMidTermForecasts(
+                            logEntry,
+                            landResponse,
+                            tempResponse,
+                            baseDateTime.toLocalDate(),
+                            cityTempRegId,
+                            cityName
+                        )
                         logEntry.apiCallStatus = WeatherApiCallStatus.SUCCESS
-                        logger.info("Successfully processed MID-TERM forecasts for {} ({}), tmFc={}", cityName, cityTempRegId, tmFc)
+                        logger.info(
+                            "Successfully processed MID-TERM forecasts for {} ({}), tmFc={}",
+                            cityName,
+                            cityTempRegId,
+                            tmFc
+                        )
                     } catch (e: Exception) {
-                        logger.error("Error parsing MID-TERM forecasts for {} ({}), tmFc={}: {}", cityName, cityTempRegId, tmFc, e.message, e)
+                        logger.error(
+                            "Error parsing MID-TERM forecasts for {} ({}), tmFc={}: {}",
+                            cityName,
+                            cityTempRegId,
+                            tmFc,
+                            e.message,
+                            e
+                        )
                         logEntry.apiCallStatus = WeatherApiCallStatus.PARSING_FAILED
                     }
                 } else if (landDataAvailable || tempDataAvailable) {
                     logEntry.apiCallStatus = WeatherApiCallStatus.PARTIAL_SUCCESS
-                    logger.warn("Partially successful or only one type of MID-TERM data for {} ({}). Land: {}, Temp: {}. tmFc={}",
-                        cityName, cityTempRegId, landDataAvailable, tempDataAvailable, tmFc)
+                    logger.warn(
+                        "Partially successful or only one type of MID-TERM data for {} ({}). Land: {}, Temp: {}. tmFc={}",
+                        cityName, cityTempRegId, landDataAvailable, tempDataAvailable, tmFc
+                    )
                     try {
-                        parseAndSaveMidTermForecasts(logEntry, landResponse, tempResponse, baseDateTime.toLocalDate(), cityTempRegId, cityName)
+                        parseAndSaveMidTermForecasts(
+                            logEntry,
+                            landResponse,
+                            tempResponse,
+                            baseDateTime.toLocalDate(),
+                            cityTempRegId,
+                            cityName
+                        )
                     } catch (e: Exception) {
-                        logger.error("Error parsing partially successful MID-TERM forecasts for {} ({}), tmFc={}: {}", cityName, cityTempRegId, tmFc, e.message, e)
+                        logger.error(
+                            "Error parsing partially successful MID-TERM forecasts for {} ({}), tmFc={}: {}",
+                            cityName,
+                            cityTempRegId,
+                            tmFc,
+                            e.message,
+                            e
+                        )
                         logEntry.apiCallStatus = WeatherApiCallStatus.PARSING_FAILED
                     }
                 } else {
                     if (logEntry.apiCallStatus == WeatherApiCallStatus.PENDING || logEntry.apiCallStatus == WeatherApiCallStatus.API_ERROR_UNKNOWN) {
-                        if (logEntry.apiCallStatus == WeatherApiCallStatus.PENDING) logEntry.apiCallStatus = WeatherApiCallStatus.NO_DATA_FOUND
+                        if (logEntry.apiCallStatus == WeatherApiCallStatus.PENDING) logEntry.apiCallStatus =
+                            WeatherApiCallStatus.NO_DATA_FOUND
                     }
-                    logger.error("Failed to fetch any valid MID-TERM forecast data for {} ({}), tmFc={}. Final status: {}", cityName, cityTempRegId, tmFc, logEntry.apiCallStatus)
+                    logger.error(
+                        "Failed to fetch any valid MID-TERM forecast data for {} ({}), tmFc={}. Final status: {}",
+                        cityName,
+                        cityTempRegId,
+                        tmFc,
+                        logEntry.apiCallStatus
+                    )
                 }
                 Mono.just(logEntry)
             }
@@ -262,15 +337,36 @@ class WeatherService(
                 if (logEntry.apiCallStatus == WeatherApiCallStatus.PENDING) {
                     logEntry.apiCallStatus = WeatherApiCallStatus.API_ERROR_UNKNOWN
                 }
-                logger.error("Both MID-TERM API calls resulted in empty Mono for {} ({}), tmFc={}. Final status: {}", cityName, cityTempRegId, tmFc, logEntry.apiCallStatus)
+                logger.error(
+                    "Both MID-TERM API calls resulted in empty Mono for {} ({}), tmFc={}. Final status: {}",
+                    cityName,
+                    cityTempRegId,
+                    tmFc,
+                    logEntry.apiCallStatus
+                )
             })
             .doFinally { _ ->
                 logEntry.updatedAt = LocalDateTime.now()
                 weatherApiLogRepository.save(logEntry)
             }
             .subscribe(
-                { updatedLog -> logger.info("Mid-term weather log updated for {}({}). Status: {}", cityName, cityTempRegId, updatedLog.apiCallStatus) },
-                { e -> logger.error("Unexpected error in reactive chain for MID-TERM weather fetch {}({}): {}", cityName, cityTempRegId, e.message, e) }
+                { updatedLog ->
+                    logger.info(
+                        "Mid-term weather log updated for {}({}). Status: {}",
+                        cityName,
+                        cityTempRegId,
+                        updatedLog.apiCallStatus
+                    )
+                },
+                { e ->
+                    logger.error(
+                        "Unexpected error in reactive chain for MID-TERM weather fetch {}({}): {}",
+                        cityName,
+                        cityTempRegId,
+                        e.message,
+                        e
+                    )
+                }
             )
     }
 
@@ -288,8 +384,10 @@ class WeatherService(
         val baseDateStr = baseDateTime.format(DateTimeFormatter.BASIC_ISO_DATE)
         val baseTimeStr = baseDateTime.format(DateTimeFormatter.ofPattern("HHmm"))
 
-        logger.info("Attempting to fetch SHORT-TERM forecasts (getVilageFcst) for {} (regionCode={}), nx={}, ny={}, baseDate={}, baseTime={}",
-            cityName, regionCode, nx, ny, baseDateStr, baseTimeStr)
+        logger.info(
+            "Attempting to fetch SHORT-TERM forecasts (getVilageFcst) for {} (regionCode={}), nx={}, ny={}, baseDate={}, baseTime={}",
+            cityName, regionCode, nx, ny, baseDateStr, baseTimeStr
+        )
 
         val queryParams = mapOf(
             "nx" to nx.toString(),
@@ -311,34 +409,58 @@ class WeatherService(
             .flatMap { response ->
                 if (!isKmaResponseSuccess(response)) {
                     val errorMsg = response.response?.header?.resultMsg ?: "Unknown error"
-                    logger.error("Short-term forecast API call failed for {}({}) with baseDate {}, baseTime {}. Result: {} - {}",
-                        cityName, regionCode, baseDateStr, baseTimeStr, response.response?.header?.resultCode, errorMsg)
-                    return@flatMap Mono.error<Unit>(ResponseStatusException(HttpStatus.BAD_GATEWAY, "단기예보 API 응답 오류: $errorMsg"))
+                    logger.error(
+                        "Short-term forecast API call failed for {}({}) with baseDate {}, baseTime {}. Result: {} - {}",
+                        cityName, regionCode, baseDateStr, baseTimeStr, response.response?.header?.resultCode, errorMsg
+                    )
+                    return@flatMap Mono.error<Unit>(CustomException(ErrorCode.INTERNAL_SERVER_ERROR))
                 }
 
                 val items = response.response?.body?.items?.item
                 if (items == null || items.isEmpty()) {
-                    logger.warn("No items found in short-term forecast response for {}({}) with baseDate {}, baseTime {}",
-                        cityName, regionCode, baseDateStr, baseTimeStr)
+                    logger.warn(
+                        "No items found in short-term forecast response for {}({}) with baseDate {}, baseTime {}",
+                        cityName, regionCode, baseDateStr, baseTimeStr
+                    )
                     return@flatMap Mono.empty<Unit>()
                 }
 
                 try {
                     parseAndSaveShortTermForecasts(items, regionCode, cityName, baseDateTime.toLocalDate())
-                    logger.info("Successfully parsed and initiated save for short-term forecasts for {}({})", cityName, regionCode)
+                    logger.info(
+                        "Successfully parsed and initiated save for short-term forecasts for {}({})",
+                        cityName,
+                        regionCode
+                    )
                 } catch (e: Exception) {
-                    logger.error("Error parsing or saving short-term forecasts for {}({}): {}", cityName, regionCode, e.message, e)
+                    logger.error(
+                        "Error parsing or saving short-term forecasts for {}({}): {}",
+                        regionCode,
+                        cityName,
+                        e.message,
+                        e
+                    )
                     return@flatMap Mono.error<Unit>(e)
                 }
                 Mono.just(Unit)
             }
             .doOnError { e ->
-                logger.error("Failed to fetch or process short-term forecasts for {}({}) with baseDate {}, baseTime {}: {}",
-                    cityName, regionCode, baseDateStr, baseTimeStr, e.message)
+                logger.error(
+                    "Failed to fetch or process short-term forecasts for {}({}) with baseDate {}, baseTime {}: {}",
+                    cityName, regionCode, baseDateStr, baseTimeStr, e.message
+                )
             }
             .subscribe(
                 { logger.info("Short-term forecast processing completed for {}({}).", cityName, regionCode) },
-                { e -> logger.error("Unhandled error in short-term forecast reactive chain for {}({}): {}", cityName, regionCode, e.message, e) }
+                { e ->
+                    logger.error(
+                        "Unhandled error in short-term forecast reactive chain for {}({}): {}",
+                        cityName,
+                        regionCode,
+                        e.message,
+                        e
+                    )
+                }
             )
     }
 
@@ -355,7 +477,14 @@ class WeatherService(
             var urlBuilder = StringBuilder("${baseUrl}${uriPath}?serviceKey=${encodedServiceKey}&dataType=JSON")
 
             queryParams.forEach { (key, value) ->
-                urlBuilder.append("&${URLEncoder.encode(key, StandardCharsets.UTF_8.name())}=${URLEncoder.encode(value, StandardCharsets.UTF_8.name())}")
+                urlBuilder.append(
+                    "&${URLEncoder.encode(key, StandardCharsets.UTF_8.name())}=${
+                        URLEncoder.encode(
+                            value,
+                            StandardCharsets.UTF_8.name()
+                        )
+                    }"
+                )
             }
             val fullUrl = urlBuilder.toString()
 
@@ -367,29 +496,38 @@ class WeatherService(
                 .retrieve()
                 .onStatus({ httpStatus -> httpStatus.isError }) { clientResponse ->
                     clientResponse.bodyToMono<String>().flatMap { errorBody ->
-                        logger.error("KMA API call ({}) failed for {}. Status: {}, Body: {}",
-                            apiNameForLog, fullUrl, clientResponse.statusCode(), errorBody)
-                        Mono.error(ResponseStatusException(clientResponse.statusCode(), "기상청 API($apiNameForLog) 호출 실패: $errorBody"))
+                        logger.error(
+                            "KMA API call ({}) failed for {}. Status: {}, Body: {}",
+                            apiNameForLog, fullUrl, clientResponse.statusCode(), errorBody
+                        )
+                        Mono.error(CustomException(ErrorCode.INTERNAL_SERVER_ERROR))
                     }
                 }
                 .bodyToMono(responseType)
                 .onErrorResume(org.springframework.web.reactive.function.UnsupportedMediaTypeException::class.java) { e ->
-                    logger.error("UnsupportedMediaTypeException for URI ({}): {}. API likely returned XML. Error: {}", apiNameForLog, fullUrl, e.message)
-                    Mono.error(ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "기상청 API($apiNameForLog) 응답 형식이 올바르지 않습니다."))
+                    logger.error(
+                        "UnsupportedMediaTypeException for URI ({}): {}. API likely returned XML. Error: {}",
+                        apiNameForLog,
+                        fullUrl,
+                        e.message
+                    )
+                    Mono.error(CustomException(ErrorCode.INTERNAL_SERVER_ERROR))
                 }
                 .flatMap { response ->
                     if (response.response?.header?.resultCode != "00") {
                         val errorMsg = response.response?.header?.resultMsg ?: "알 수 없는 오류"
-                        logger.warn("KMA API error ({}) in response for URI {}. ResultCode: {}, ResultMsg: {}",
-                            apiNameForLog, fullUrl, response.response?.header?.resultCode, errorMsg)
-                        Mono.error(ResponseStatusException(HttpStatus.BAD_GATEWAY, "기상청 API($apiNameForLog) 오류 응답: $errorMsg"))
+                        logger.warn(
+                            "KMA API error ({}) in response for URI {}. ResultCode: {}, ResultMsg: {}",
+                            apiNameForLog, fullUrl, response.response?.header?.resultCode, errorMsg
+                        )
+                        Mono.error(CustomException(ErrorCode.INTERNAL_SERVER_ERROR))
                     } else {
                         Mono.just(response)
                     }
                 }
         } catch (e: Exception) {
             logger.error("Failed to build KMA API ({}) URI or encode params: ${e.message}", apiNameForLog, e)
-            return Mono.error(ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "API($apiNameForLog) 요청 구성 중 오류 발생: ${e.message}"))
+            return Mono.error(CustomException(ErrorCode.INTERNAL_SERVER_ERROR))
         }
     }
 
@@ -409,8 +547,10 @@ class WeatherService(
         val tempItem = tempResponse?.response?.body?.items?.item?.firstOrNull()
 
         if (landItem == null && tempItem == null) {
-            logger.warn("No mid-term forecast items found in land or temp response for {}({}), baseDate={}",
-                cityName, cityTempRegId, baseDate)
+            logger.warn(
+                "No mid-term forecast items found in land or temp response for {}({}), baseDate={}",
+                cityName, cityTempRegId, baseDate
+            )
             return
         }
 
@@ -457,7 +597,12 @@ class WeatherService(
                 )
                 logEntry.addDailyWeatherForecast(dailyForecast)
             } else {
-                logger.debug("No valid MID-TERM forecast data to save for {} on {} (offset: {})", cityTempRegId, forecastDate, dayOffset)
+                logger.debug(
+                    "No valid MID-TERM forecast data to save for {} on {} (offset: {})",
+                    cityTempRegId,
+                    forecastDate,
+                    dayOffset
+                )
             }
         }
     }
@@ -469,7 +614,10 @@ class WeatherService(
             val time = LocalTime.parse(fcstTimeStr, fcstTimeFormatter)
             time.hour < 12
         } catch (e: Exception) {
-            logger.warn("Could not parse fcstTimeStr: {} for AM/PM check, assuming PM for safety or specific logic needed.", fcstTimeStr)
+            logger.warn(
+                "Could not parse fcstTimeStr: {} for AM/PM check, assuming PM for safety or specific logic needed.",
+                fcstTimeStr
+            )
             false
         }
     }
@@ -505,17 +653,28 @@ class WeatherService(
             logger.warn("No items to parse for short-term forecast for region: {}", regionCode)
             return
         }
-        logger.info("Parsing ${items.size} short-term forecast items for region: {}, city: {}, apiBaseDate: {}", regionCode, cityName, apiBaseDate)
+        logger.info(
+            "Parsing ${items.size} short-term forecast items for region: {}, city: {}, apiBaseDate: {}",
+            regionCode,
+            cityName,
+            apiBaseDate
+        )
 
         val forecastsByDate = items.groupBy { it["fcstDate"] as? String }
         val dailyForecastsToSaveOrUpdate = mutableListOf<DailyWeatherForecast>()
 
         for (dayOffset in 0..3) {
-            val targetForecastDateStr = apiBaseDate.plusDays(dayOffset.toLong()).format(DateTimeFormatter.BASIC_ISO_DATE)
+            val targetForecastDateStr =
+                apiBaseDate.plusDays(dayOffset.toLong()).format(DateTimeFormatter.BASIC_ISO_DATE)
             val hourlyItemsForDate = forecastsByDate[targetForecastDateStr]
 
             if (hourlyItemsForDate == null || hourlyItemsForDate.isEmpty()) {
-                logger.debug("No short-term forecast items for date: {} (offset: {}) for region {}", targetForecastDateStr, dayOffset, regionCode)
+                logger.debug(
+                    "No short-term forecast items for date: {} (offset: {}) for region {}",
+                    targetForecastDateStr,
+                    dayOffset,
+                    regionCode
+                )
                 continue
             }
 
@@ -546,6 +705,7 @@ class WeatherService(
                             if (isCurrentAm) amPopValues.add(it) else pmPopValues.add(it)
                         }
                     }
+
                     "PTY" -> {
                         fcstValueStr?.let {
                             if (it != "0") {
@@ -553,6 +713,7 @@ class WeatherService(
                             }
                         }
                     }
+
                     "SKY" -> {
                         fcstValueStr?.let {
                             if (isCurrentAm) amSkyValues.add(it) else pmSkyValues.add(it)
@@ -567,7 +728,8 @@ class WeatherService(
             val rainProbPm = pmPopValues.maxOrNull()
 
             val forecastDate = LocalDate.parse(targetForecastDateStr, DateTimeFormatter.BASIC_ISO_DATE)
-            val existingForecast = dailyWeatherForecastRepository.findByRegionCodeAndForecastDate(regionCode, forecastDate)
+            val existingForecast =
+                dailyWeatherForecastRepository.findByRegionCodeAndForecastDate(regionCode, forecastDate)
             val dailyForecast = existingForecast.orElseGet {
                 DailyWeatherForecast(
                     regionCode = regionCode,
@@ -586,13 +748,26 @@ class WeatherService(
             dailyForecast.updatedAt = LocalDateTime.now()
 
             dailyForecastsToSaveOrUpdate.add(dailyForecast)
-            logger.debug("Prepared short-term daily forecast for {} on {}: AM='{}'({}%). PM='{}'({}%). MinT={}. MaxT={}",
-                regionCode, forecastDate, weatherAm ?: "N/A", rainProbAm ?: "N/A", weatherPm ?: "N/A", rainProbPm ?: "N/A", dailyMinTemp ?: "N/A", dailyMaxTemp ?: "N/A")
+            logger.debug(
+                "Prepared short-term daily forecast for {} on {}: AM='{}'({}%). PM='{}'({}%). MinT={}. MaxT={}",
+                regionCode,
+                forecastDate,
+                weatherAm ?: "N/A",
+                rainProbAm ?: "N/A",
+                weatherPm ?: "N/A",
+                rainProbPm ?: "N/A",
+                dailyMinTemp ?: "N/A",
+                dailyMaxTemp ?: "N/A"
+            )
         }
 
         if (dailyForecastsToSaveOrUpdate.isNotEmpty()) {
             dailyWeatherForecastRepository.saveAll(dailyForecastsToSaveOrUpdate)
-            logger.info("Successfully saved/updated {} daily short-term forecasts for region {}", dailyForecastsToSaveOrUpdate.size, regionCode)
+            logger.info(
+                "Successfully saved/updated {} daily short-term forecasts for region {}",
+                dailyForecastsToSaveOrUpdate.size,
+                regionCode
+            )
         }
     }
 }

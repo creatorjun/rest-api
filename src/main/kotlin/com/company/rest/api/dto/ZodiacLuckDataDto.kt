@@ -1,10 +1,10 @@
 package com.company.rest.api.dto
 
+// 이전 엔티티 임포트 com.company.rest.api.entity.ZodiacSignHoroscope 제거
+import com.company.rest.api.entity.ZodiacSignLuck
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.LocalDate
-// 이전 엔티티 임포트 com.company.rest.api.entity.ZodiacSignHoroscope 제거
-import com.company.rest.api.entity.ZodiacSignLuck // 새로운 엔티티 임포트
 
 data class ZodiacLuckDataDto( // 클래스 이름 변경
     val requestDate: LocalDate, // 운세 날짜
@@ -20,7 +20,11 @@ data class ZodiacLuckDataDto( // 클래스 이름 변경
 ) {
     companion object {
         // ZodiacSignLuck 엔티티를 ZodiacLuckDataDto로 변환하는 확장 함수 또는 정적 메소드
-        fun fromEntity(entity: ZodiacSignLuck, requestDate: LocalDate, objectMapper: ObjectMapper): ZodiacLuckDataDto { // 파라미터 타입 변경
+        fun fromEntity(
+            entity: ZodiacSignLuck,
+            requestDate: LocalDate,
+            objectMapper: ObjectMapper
+        ): ZodiacLuckDataDto { // 파라미터 타입 변경
             val applicableYearsList: List<String> = try {
                 entity.applicableYearsJson?.let {
                     objectMapper.readValue(it, object : TypeReference<List<String>>() {})

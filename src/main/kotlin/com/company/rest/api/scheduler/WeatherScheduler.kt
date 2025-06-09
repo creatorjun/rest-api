@@ -38,7 +38,8 @@ class WeatherScheduler(
             return
         }
 
-        logger.info("Targeting KMA Short-Term API announcement time (base_date={}, base_time={})",
+        logger.info(
+            "Targeting KMA Short-Term API announcement time (base_date={}, base_time={})",
             baseDateTimeForShortTermApi.format(DateTimeFormatter.BASIC_ISO_DATE),
             baseDateTimeForShortTermApi.format(DateTimeFormatter.ofPattern("HHmm"))
         )
@@ -57,7 +58,8 @@ class WeatherScheduler(
             }
         }
 
-        logger.info("Task runFetchShortTermForecasts for date {} completed at {} (Korea Time)",
+        logger.info(
+            "Task runFetchShortTermForecasts for date {} completed at {} (Korea Time)",
             date,
             LocalDateTime.now(KOREA_ZONE_ID).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         )
@@ -84,7 +86,10 @@ class WeatherScheduler(
             return
         }
 
-        logger.info("Targeting KMA Mid-Term API announcement time (tmFc): {}", baseDateTimeForMidTermApi.format(DateTimeFormatter.ofPattern("yyyyMMddHHmm")))
+        logger.info(
+            "Targeting KMA Mid-Term API announcement time (tmFc): {}",
+            baseDateTimeForMidTermApi.format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"))
+        )
         logger.info("Fetching MID-TERM forecasts for the following city temp_reg_ids: {}", cityCodesToFetch)
 
         cityCodesToFetch.forEach { cityTempRegId ->
@@ -100,7 +105,8 @@ class WeatherScheduler(
             }
         }
 
-        logger.info("Task runFetchMidTermForecasts for date {} completed at {} (Korea Time)",
+        logger.info(
+            "Task runFetchMidTermForecasts for date {} completed at {} (Korea Time)",
             date,
             LocalDateTime.now(KOREA_ZONE_ID).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         )

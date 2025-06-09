@@ -1,13 +1,12 @@
 package com.company.rest.api.controller
 
 import com.company.rest.api.dto.AuthResponseDto
-import com.company.rest.api.dto.SocialLoginRequestDto // 수정된 DTO를 사용하는 것으로 간주
+import com.company.rest.api.dto.SocialLoginRequestDto
 import com.company.rest.api.service.AuthService
 import com.company.rest.api.service.SocialLoginService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
@@ -18,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import reactor.core.publisher.Mono
+import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 // Refresh Token 요청을 위한 DTO
 data class RefreshTokenRequest(

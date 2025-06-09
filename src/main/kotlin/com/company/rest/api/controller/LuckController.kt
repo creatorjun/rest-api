@@ -1,5 +1,6 @@
 package com.company.rest.api.controller
 
+// import org.springframework.web.bind.annotation.RequestParam // getLuckForZodiacAndDate에서만 사용하던 것이므로 삭제 가능
 import com.company.rest.api.dto.ZodiacLuckDataDto
 import com.company.rest.api.service.GeminiService
 import io.swagger.v3.oas.annotations.Operation
@@ -11,14 +12,10 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestMapping
-// import org.springframework.web.bind.annotation.RequestParam // getLuckForZodiacAndDate에서만 사용하던 것이므로 삭제 가능
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
 import java.time.ZoneId
+
 // import java.time.format.DateTimeParseException // getLuckForZodiacAndDate에서만 사용하던 것이므로 삭제
 
 @RestController
@@ -36,7 +33,10 @@ class LuckController(
         responses = [
             ApiResponse(
                 responseCode = "200", description = "운세 정보 조회 성공",
-                content = [Content(mediaType = "application/json", schema = Schema(implementation = ZodiacLuckDataDto::class))]
+                content = [Content(
+                    mediaType = "application/json",
+                    schema = Schema(implementation = ZodiacLuckDataDto::class)
+                )]
             ),
             ApiResponse(responseCode = "400", description = "잘못된 띠 이름"),
             ApiResponse(responseCode = "404", description = "해당 띠 또는 해당 날짜의 운세 정보를 찾을 수 없거나 아직 준비되지 않음")
@@ -71,7 +71,10 @@ class LuckController(
         summary = "오늘의 운세 정보 수동으로 가져오기 및 저장 (관리자/테스트용)",
         description = "오늘 날짜의 운세 정보를 제미나이로부터 즉시 가져와 데이터베이스에 저장/업데이트합니다. 주로 테스트 또는 긴급 데이터 동기화에 사용됩니다.",
         responses = [
-            ApiResponse(responseCode = "200", description = "운세 정보 가져오기 작업이 성공적으로 시작됨. (실제 저장 결과는 비동기적일 수 있으므로 로그 및 DB 확인 필요)"),
+            ApiResponse(
+                responseCode = "200",
+                description = "운세 정보 가져오기 작업이 성공적으로 시작됨. (실제 저장 결과는 비동기적일 수 있으므로 로그 및 DB 확인 필요)"
+            ),
             ApiResponse(responseCode = "500", description = "운세 정보 가져오기 작업 시작 중 내부 서버 오류 발생")
         ]
     )

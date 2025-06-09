@@ -1,29 +1,29 @@
 package com.company.rest.api.service
 
+import com.company.rest.api.dto.AuthResponseDto
 import com.company.rest.api.dto.LoginProvider
 import com.company.rest.api.dto.SocialLoginRequestDto
-import com.company.rest.api.dto.AuthResponseDto
 import com.company.rest.api.dto.social.KakaoUserResponse
 import com.company.rest.api.dto.social.NaverUserResponse
 import com.company.rest.api.entity.User
+import com.company.rest.api.exception.CustomException
+import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.repository.UserRepository
 import com.company.rest.api.security.JwtTokenProvider
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.server.ResponseStatusException
 import reactor.core.publisher.Mono
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Date
-import java.nio.charset.StandardCharsets
+import java.util.*
 
 @Service
 class SocialLoginService(
@@ -76,13 +76,12 @@ class SocialLoginService(
                         verifiedUser.originalId.take(10) + "...",
                         hashedOriginalId.take(10) + "..."
                     )
-                    val finalNickname = request.nickname ?: verifiedUser.nickname ?: "User_${verifiedUser.originalId.take(6)}"
+                    val finalNickname =
+                        request.nickname ?: verifiedUser.nickname ?: "User_${verifiedUser.originalId.take(6)}"
                     val newUser = User(
                         nickname = finalNickname,
                         loginProvider = request.platform,
                         providerId = hashedOriginalId
-                        // fcmToken은 로그인 시점에서는 아직 없을 수 있으므로, 여기서는 설정하지 않음.
-                        // 필요하다면 클라이언트가 로그인 후 별도 API로 FCM 토큰을 등록/갱신하도록 유도.
                     )
                     userRepository.save(newUser)
                 }
@@ -132,7 +131,6 @@ class SocialLoginService(
                     partnerNickname ?: "N/A"
                 )
 
-                // 여기가 문제의 지점이었습니다! userEntity.fcmToken을 전달하도록 수정했습니다.
                 val authResponse = AuthResponseDto(
                     accessToken = appAccessToken,
                     refreshToken = appRefreshToken,
@@ -144,7 +142,7 @@ class SocialLoginService(
                     partnerUid = userEntity.partnerUserUid,
                     partnerNickname = partnerNickname,
                     appPasswordSet = userEntity.appPasswordIsSet,
-                    fcmToken = userEntity.fcmToken // 사용자 엔티티의 fcmToken 값을 전달
+                    fcmToken = userEntity.fcmToken
                 )
 
                 logger.debug("Login success AuthResponseDto for user UID {}: {}", userEntity.uid, authResponse)
@@ -152,7 +150,7 @@ class SocialLoginService(
                 Mono.just(authResponse)
             }
             .doOnError { e ->
-                if (e !is ResponseStatusException) {
+                if (e !is CustomException) {
                     logger.error(
                         "Unexpected error during social login for provider {}, clientSentOriginalId (from request.id) {}",
                         request.platform, request.id, e
@@ -162,14 +160,16 @@ class SocialLoginService(
     }
 
     private fun verifySocialToken(request: SocialLoginRequestDto): Mono<VerifiedSocialUser> {
-        logger.info("Verifying social token for provider: {}, ClientSentOriginalID (from request.id): {}, AccessToken (first 10 chars): {}...",
-            request.platform, request.id, request.socialAccessToken.take(10))
+        logger.info(
+            "Verifying social token for provider: {}, ClientSentOriginalID (from request.id): {}, AccessToken (first 10 chars): {}...",
+            request.platform, request.id, request.socialAccessToken.take(10)
+        )
         return when (request.platform) {
             LoginProvider.NAVER -> fetchNaverUserProfile(request.socialAccessToken)
             LoginProvider.KAKAO -> fetchKakaoUserProfile(request.socialAccessToken)
             else -> {
                 logger.warn("Unsupported login platform: {}", request.platform)
-                Mono.error(ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 로그인 플랫폼입니다: ${request.platform}"))
+                Mono.error(CustomException(ErrorCode.UNSUPPORTED_LOGIN_PROVIDER))
             }
         }
     }
@@ -183,32 +183,29 @@ class SocialLoginService(
                 clientResponse.bodyToMono(String::class.java)
                     .flatMap { errorBody ->
                         logger.error(
-                            "Naver API call failed. Status: ${clientResponse.statusCode()}, AccessToken: ${accessToken.take(10)}..., ResponseBody: $errorBody"
+                            "Naver API call failed. Status: ${clientResponse.statusCode()}, AccessToken: ${
+                                accessToken.take(
+                                    10
+                                )
+                            }..., ResponseBody: $errorBody"
                         )
-                        Mono.error(
-                            ResponseStatusException(
-                                clientResponse.statusCode(),
-                                "네이버 인증 실패: ${clientResponse.statusCode()}"
-                            )
-                        )
+                        Mono.error(CustomException(ErrorCode.SOCIAL_AUTHENTICATION_FAILED))
                     }
             })
             .bodyToMono(NaverUserResponse::class.java)
             .flatMap { naverResponse ->
                 if (naverResponse.resultCode == "00" && naverResponse.response != null) {
                     val profile = naverResponse.response
-                    logger.info("Successfully fetched Naver profile. Original Provider ID (from Naver): {}", profile.id.take(10) + "...")
+                    logger.info(
+                        "Successfully fetched Naver profile. Original Provider ID (from Naver): {}",
+                        profile.id.take(10) + "..."
+                    )
                     Mono.just(VerifiedSocialUser(profile.id, profile.nickname))
                 } else {
                     logger.error(
                         "Naver user info fetch logic error. ResultCode: ${naverResponse.resultCode}, Message: ${naverResponse.message}"
                     )
-                    Mono.error(
-                        ResponseStatusException(
-                            HttpStatus.UNAUTHORIZED,
-                            "네이버 사용자 정보 조회 실패: ${naverResponse.message}"
-                        )
-                    )
+                    Mono.error(CustomException(ErrorCode.SOCIAL_AUTHENTICATION_FAILED))
                 }
             }
     }
@@ -222,21 +219,23 @@ class SocialLoginService(
                 clientResponse.bodyToMono(String::class.java)
                     .flatMap { errorBody ->
                         logger.error(
-                            "Kakao API call failed. Status: ${clientResponse.statusCode()}, AccessToken: ${accessToken.take(10)}..., ResponseBody: $errorBody"
+                            "Kakao API call failed. Status: ${clientResponse.statusCode()}, AccessToken: ${
+                                accessToken.take(
+                                    10
+                                )
+                            }..., ResponseBody: $errorBody"
                         )
-                        Mono.error(
-                            ResponseStatusException(
-                                clientResponse.statusCode(),
-                                "카카오 인증 실패: ${clientResponse.statusCode()}"
-                            )
-                        )
+                        Mono.error(CustomException(ErrorCode.SOCIAL_AUTHENTICATION_FAILED))
                     }
             })
             .bodyToMono(KakaoUserResponse::class.java)
             .map { kakaoResponse ->
                 val nickname = kakaoResponse.properties?.nickname
                     ?: kakaoResponse.kakaoAccount?.profile?.nickname
-                logger.info("Successfully fetched Kakao profile. Original Provider ID (from Kakao): {}", kakaoResponse.id.toString().take(10) + "...")
+                logger.info(
+                    "Successfully fetched Kakao profile. Original Provider ID (from Kakao): {}",
+                    kakaoResponse.id.toString().take(10) + "..."
+                )
                 VerifiedSocialUser(kakaoResponse.id.toString(), nickname)
             }
     }

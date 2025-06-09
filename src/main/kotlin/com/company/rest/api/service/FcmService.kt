@@ -1,14 +1,8 @@
 package com.company.rest.api.service
 
-import com.google.firebase.messaging.FirebaseMessaging
-import com.google.firebase.messaging.FirebaseMessagingException
-import com.google.firebase.messaging.Message
-import com.google.firebase.messaging.Notification
-import com.google.firebase.messaging.MessagingErrorCode
+import com.google.firebase.messaging.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Propagation
-import org.springframework.transaction.annotation.Transactional
 
 @Service
 class FcmService(
@@ -55,7 +49,11 @@ class FcmService(
 
         try {
             val response = FirebaseMessaging.getInstance().send(message)
-            logger.info("Successfully sent FCM message: {}. Target token (first 20 chars): {}...", response, userFcmToken.take(20))
+            logger.info(
+                "Successfully sent FCM message: {}. Target token (first 20 chars): {}...",
+                response,
+                userFcmToken.take(20)
+            )
         } catch (e: FirebaseMessagingException) {
             logger.error(
                 "Failed to send FCM message to token (first 20 chars): {}... - ErrorCode: {}, Message: {}",
@@ -67,7 +65,8 @@ class FcmService(
             // 등록되지 않았거나(UNREGISTERED) 유효하지 않은 인자(INVALID_ARGUMENT) 오류 코드인 경우
             // 해당 FCM 토큰을 DB에서 제거하도록 UserService에 요청합니다.
             if (e.messagingErrorCode == MessagingErrorCode.UNREGISTERED ||
-                e.messagingErrorCode == MessagingErrorCode.INVALID_ARGUMENT) { // INVALID_ARGUMENT는 때로 유효하지 않은 토큰을 의미할 수 있음
+                e.messagingErrorCode == MessagingErrorCode.INVALID_ARGUMENT
+            ) { // INVALID_ARGUMENT는 때로 유효하지 않은 토큰을 의미할 수 있음
                 logger.warn(
                     "FCM token '{}' (first 20 chars) seems to be unregistered or invalid. " +
                             "Attempting to remove it from the database.",
