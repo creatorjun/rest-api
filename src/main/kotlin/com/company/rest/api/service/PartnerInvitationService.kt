@@ -171,4 +171,49 @@ class PartnerInvitationService(
 
         return PartnerRelationResponseDto.fromUsers(accepterUser, currentIssuerUser)
     }
+
+    @Transactional
+    fun deleteInvitation(issuerUserUid: String, invitationId: String) {
+        logger.info("User UID: {} attempting to delete invitation ID: {}", issuerUserUid, invitationId)
+
+        // 1. 초대장 ID로 초대 정보를 조회합니다.
+        val invitation = partnerInvitationRepository.findById(invitationId)
+            .orElseThrow {
+                logger.warn(
+                    "Attempted to delete non-existent invitation ID: {} by user UID: {}",
+                    invitationId,
+                    issuerUserUid
+                )
+                throw CustomException(ErrorCode.INVITATION_NOT_FOUND)
+            }
+
+        // 2. 요청자가 초대장을 생성한 사용자인지 확인합니다.
+        if (invitation.issuerUser.uid != issuerUserUid) {
+            logger.warn(
+                "User UID: {} attempted to delete invitation ID: {} owned by another user UID: {}",
+                issuerUserUid,
+                invitationId,
+                invitation.issuerUser.uid
+            )
+            throw CustomException(ErrorCode.FORBIDDEN_INVITATION_ACCESS)
+        }
+
+        // 3. 이미 사용된 초대 코드인지 확인합니다.
+        if (invitation.isUsed) {
+            logger.warn(
+                "User UID: {} attempted to delete an already used invitation ID: {}",
+                issuerUserUid,
+                invitationId
+            )
+            throw CustomException(ErrorCode.INVITATION_ALREADY_USED)
+        }
+
+        // 4. 모든 검증을 통과하면 초대장을 삭제합니다.
+        partnerInvitationRepository.delete(invitation)
+        logger.info(
+            "Invitation ID: {} deleted successfully by issuer user UID: {}",
+            invitationId,
+            issuerUserUid
+        )
+    }
 }

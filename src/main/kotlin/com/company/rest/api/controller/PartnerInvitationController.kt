@@ -19,10 +19,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
@@ -110,5 +107,38 @@ class PartnerInvitationController(
             invitationId = requestDto.invitationId
         )
         return ResponseEntity.ok(partnerRelationResponse)
+    }
+
+    @Operation(
+        summary = "파트너 초대 코드 삭제",
+        description = "인증된 사용자가 생성했던, 아직 사용되지 않은 초대 코드를 삭제합니다.",
+        parameters = [
+            Parameter(
+                name = "Authorization",
+                `in` = ParameterIn.HEADER,
+                description = "Bearer {Access Token}",
+                required = true,
+                schema = Schema(type = "string")
+            )
+        ]
+    )
+    @ApiResponse(responseCode = "204", description = "초대 코드 삭제 성공 (No Content)")
+    @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 이미 사용된 초대 코드)")
+    @ApiResponse(responseCode = "401", description = "인증 실패")
+    @ApiResponse(responseCode = "403", description = "권한 없음 (자신의 초대가 아님)")
+    @ApiResponse(responseCode = "404", description = "삭제할 초대 코드를 찾을 수 없음")
+    @DeleteMapping("/{invitationId}")
+    fun deletePartnerInvitation(
+        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(description = "삭제할 초대 코드는 URL 경로에 포함시켜주세요.", required = true, example = "a1b2c3d4-e5f6-...")
+        @PathVariable invitationId: String
+    ): ResponseEntity<Void> {
+        if (userUid == null) {
+            logger.warn("Delete partner invitation attempt: User UID from @AuthenticationPrincipal is null.")
+            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
+        }
+
+        partnerInvitationService.deleteInvitation(userUid, invitationId)
+        return ResponseEntity.noContent().build()
     }
 }

@@ -30,11 +30,12 @@ enum class ErrorCode(
     APP_PASSWORD_INVALID(HttpStatus.UNAUTHORIZED, "앱 비밀번호가 일치하지 않습니다."),
     CURRENT_APP_PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "기존 비밀번호 변경 시 현재 앱 비밀번호를 입력해야 합니다."),
 
-    // Partner
     PARTNER_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 파트너가 존재합니다."),
     CANNOT_INVITE_SELF(HttpStatus.BAD_REQUEST, "자기 자신을 초대할 수 없습니다."),
     INVITATION_NOT_FOUND(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 초대 코드입니다."),
     INVITATION_ISSUER_HAS_PARTNER(HttpStatus.CONFLICT, "초대자가 이미 다른 파트너와 연결되었습니다."),
+    FORBIDDEN_INVITATION_ACCESS(HttpStatus.FORBIDDEN, "해당 초대 코드를 삭제할 권한이 없습니다."),
+    INVITATION_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용된 초대 코드는 삭제할 수 없습니다."),
 
     // Event
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."),
