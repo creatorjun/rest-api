@@ -1,6 +1,5 @@
 package com.company.rest.api.dto
 
-// 이전 엔티티 임포트 com.company.rest.api.entity.ZodiacSignHoroscope 제거
 import com.company.rest.api.entity.ZodiacSignLuck
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper

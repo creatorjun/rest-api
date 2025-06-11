@@ -1,14 +1,14 @@
 package com.company.rest.api.service
 
-import com.company.rest.api.dto.GeminiLuckResponseDto // DTO 이름 변경
-import com.company.rest.api.dto.ZodiacLuckDataDto // DTO 이름 변경
-import com.company.rest.api.entity.DailyLuckLog // 엔티티 이름 변경
-import com.company.rest.api.entity.LuckParsingStatus // 열거형 이름 변경
-import com.company.rest.api.entity.ZodiacSignLuck // 엔티티 이름 변경
-import com.company.rest.api.repository.DailyLuckLogRepository // Repository 이름 변경
+import com.company.rest.api.dto.GeminiLuckResponseDto
+import com.company.rest.api.dto.ZodiacLuckDataDto
+import com.company.rest.api.entity.DailyLuckLog
+import com.company.rest.api.entity.LuckParsingStatus
+import com.company.rest.api.entity.ZodiacSignLuck
+import com.company.rest.api.repository.DailyLuckLogRepository
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.genai.Client // 이전 Gemini API 클라이언트 유지
+import com.google.genai.Client
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -20,7 +20,7 @@ import java.time.LocalDateTime
 @Service
 class GeminiService(
     @Value("\${gemini.api.key}") private val apiKey: String,
-    private val dailyLuckLogRepository: DailyLuckLogRepository, // Repository 주입 변경
+    private val dailyLuckLogRepository: DailyLuckLogRepository,
     private val objectMapper: ObjectMapper
 ) {
     private val logger = LoggerFactory.getLogger(GeminiService::class.java)
@@ -28,11 +28,8 @@ class GeminiService(
     @Value("\${gemini.model.name}")
     private lateinit var modelName: String
 
-    private lateinit var client: Client // 이전 Gemini API 클라이언트 유지
+    private lateinit var client: Client
 
-    // Gemini API에 전달하는 질문은 "운세"라는 단어를 포함하는 것이 자연스러울 수 있으므로,
-    // 이 부분은 사용자님의 판단에 따라 "운세"를 유지하거나 "행운" 등으로 변경할 수 있습니다.
-    // 현재는 "운세"를 유지하겠습니다.
     private val dailyLuckQuestion: String =
         """이제부터 넌 세계 최고의 점성술사 / 사주풀이 / 타로 마스터 전문가야. 별자리 사주풀이 운세 띠별운세 타로카드 명리학 동양철학 및 점성술에 관한 모든 사항을 완벽하게 숙지해서 다음 물음에 답변해줘 단, 너무 띠와 연관지어 생각하지 말고, 매번 다른 답변을 생성하는데 주력해야해. 1950년 이후 출생한 사람들에대한 띠별 운세를 각 띠별로 묶어서 오늘의 운세를 다음과 같은 형식을 갖는 json 파일로 줘
 
@@ -50,7 +47,7 @@ class GeminiService(
       "오늘의조언": "긍정적인 마음으로 하루를 시작하고, 찾아오는 기회를 놓치지 마세요."
     }
   ]
-}""" // 필드명 변경 dailyHoroscopeQuestion -> dailyLuckQuestion
+}"""
 
     @PostConstruct
     fun init() {
@@ -78,7 +75,7 @@ class GeminiService(
                 modelName,
                 question.take(100)
             )
-            val response = client.models.generateContent(modelName, question, null) // 이전 Gemini API 호출 방식 유지
+            val response = client.models.generateContent(modelName, question, null)
             val responseText = response.text()
 
             if (responseText != null && responseText.isNotBlank()) {
@@ -94,30 +91,30 @@ class GeminiService(
     }
 
     @Transactional
-    fun fetchAndStoreDailyLuck(requestDate: LocalDate) { // 메소드명 변경
+    fun fetchAndStoreDailyLuck(requestDate: LocalDate) {
         var logEntry = dailyLuckLogRepository.findByRequestDate(requestDate).orElseGet {
-            DailyLuckLog( // 엔티티 이름 변경
+            DailyLuckLog(
                 requestDate = requestDate,
-                questionAsked = dailyLuckQuestion, // 질문 필드명 변경
-                parsingStatus = LuckParsingStatus.PENDING, // 열거형 이름 변경
+                questionAsked = dailyLuckQuestion,
+                parsingStatus = LuckParsingStatus.PENDING,
                 createdAt = LocalDateTime.now(),
                 updatedAt = LocalDateTime.now()
             )
         }
 
-        if (logEntry.parsingStatus == LuckParsingStatus.SUCCESS) { // 열거형 이름 변경
+        if (logEntry.parsingStatus == LuckParsingStatus.SUCCESS) {
             logger.info(
                 "Daily luck for {} has already been successfully processed. Skipping.",
                 requestDate
-            ) // 로그 메시지 변경
+            )
             return
         }
 
-        logEntry.parsingStatus = LuckParsingStatus.PENDING // 열거형 이름 변경
+        logEntry.parsingStatus = LuckParsingStatus.PENDING
         logEntry.updatedAt = LocalDateTime.now()
         logEntry = dailyLuckLogRepository.save(logEntry)
 
-        val rawResponse = askGemini(dailyLuckQuestion) // 질문 필드명 변경
+        val rawResponse = askGemini(dailyLuckQuestion)
         logEntry.rawResponse = rawResponse
         logEntry.updatedAt = LocalDateTime.now()
 
@@ -127,7 +124,7 @@ class GeminiService(
                 requestDate,
                 rawResponse
             )
-            logEntry.parsingStatus = LuckParsingStatus.GEMINI_ERROR // 열거형 이름 변경
+            logEntry.parsingStatus = LuckParsingStatus.GEMINI_ERROR
             dailyLuckLogRepository.save(logEntry)
             return
         }
@@ -140,24 +137,24 @@ class GeminiService(
                     requestDate,
                     rawResponse.take(500)
                 )
-                logEntry.parsingStatus = LuckParsingStatus.PARSING_FAILED // 열거형 이름 변경
+                logEntry.parsingStatus = LuckParsingStatus.PARSING_FAILED
                 dailyLuckLogRepository.save(logEntry)
                 return
             }
 
             val luckResponseDto =
-                objectMapper.readValue(jsonResponseString, GeminiLuckResponseDto::class.java) // DTO 이름 변경
+                objectMapper.readValue(jsonResponseString, GeminiLuckResponseDto::class.java)
 
-            if (luckResponseDto.zodiacLucks == null || luckResponseDto.zodiacLucks.isEmpty()) { // 필드명 변경
-                logger.warn("Gemini response parsed, but no luck data found for date: {}", requestDate) // 로그 메시지 변경
-                logEntry.parsingStatus = LuckParsingStatus.NO_DATA // 열거형 이름 변경
+            if (luckResponseDto.zodiacLucks == null || luckResponseDto.zodiacLucks.isEmpty()) {
+                logger.warn("Gemini response parsed, but no luck data found for date: {}", requestDate)
+                logEntry.parsingStatus = LuckParsingStatus.NO_DATA
                 dailyLuckLogRepository.save(logEntry)
                 return
             }
 
-            logEntry.luckEntries.clear() // 필드명 변경
+            logEntry.luckEntries.clear()
 
-            for (detailDto in luckResponseDto.zodiacLucks) { // 필드명 변경
+            for (detailDto in luckResponseDto.zodiacLucks) {
                 val applicableYearsJsonString = try {
                     objectMapper.writeValueAsString(detailDto.applicableYears ?: emptyList<String>())
                 } catch (e: JsonProcessingException) {
@@ -165,7 +162,7 @@ class GeminiService(
                     "[]"
                 }
 
-                val zodiacSignLuckEntry = ZodiacSignLuck( // 엔티티 이름 변경
+                val zodiacSignLuckEntry = ZodiacSignLuck(
                     zodiacName = detailDto.zodiacName ?: "알 수 없는 띠",
                     applicableYearsJson = applicableYearsJsonString,
                     overallLuck = detailDto.overallLuck,
@@ -176,13 +173,13 @@ class GeminiService(
                     luckyColor = detailDto.luckyColor,
                     advice = detailDto.advice
                 )
-                logEntry.addZodiacSignLuck(zodiacSignLuckEntry) // 메소드명 변경
+                logEntry.addZodiacSignLuck(zodiacSignLuckEntry)
             }
-            logEntry.parsingStatus = LuckParsingStatus.SUCCESS // 열거형 이름 변경
+            logEntry.parsingStatus = LuckParsingStatus.SUCCESS
             logger.info(
                 "Successfully fetched, parsed, and mapped daily luck entries for date: {}",
                 requestDate
-            ) // 로그 메시지 변경
+            )
 
         } catch (e: JsonProcessingException) {
             logger.error(
@@ -191,15 +188,15 @@ class GeminiService(
                 e.message,
                 rawResponse.take(500)
             )
-            logEntry.parsingStatus = LuckParsingStatus.PARSING_FAILED // 열거형 이름 변경
+            logEntry.parsingStatus = LuckParsingStatus.PARSING_FAILED
         } catch (e: Exception) {
             logger.error(
                 "An unexpected error occurred during luck processing for date: {}. Error: {}",
                 requestDate,
                 e.message,
                 e
-            ) // 로그 메시지 변경
-            logEntry.parsingStatus = LuckParsingStatus.PARSING_FAILED // 열거형 이름 변경
+            )
+            logEntry.parsingStatus = LuckParsingStatus.PARSING_FAILED
         } finally {
             logEntry.updatedAt = LocalDateTime.now()
             dailyLuckLogRepository.save(logEntry)
@@ -208,7 +205,7 @@ class GeminiService(
 
     private fun extractJsonString(rawResponse: String): String? {
         val markdownJsonPattern = "```json\\s*([\\s\\S]+?)\\s*```".toRegex()
-        var match = markdownJsonPattern.find(rawResponse)
+        val match = markdownJsonPattern.find(rawResponse)
         if (match != null) {
             return match.groupValues[1].trim()
         }
@@ -239,44 +236,73 @@ class GeminiService(
         }
     }
 
+    // --- 이 메소드들이 수정 및 추가되었습니다 ---
+
     /**
-     * 특정 날짜와 띠 이름에 해당하는 운세 정보를 조회합니다.
+     * 특정 날짜의 모든 띠별 운세 정보를 조회합니다.
      * @param requestDate 조회할 날짜
-     * @param zodiacName 조회할 띠 이름 (예: "쥐띠")
-     * @return ZodiacLuckDataDto? 해당 띠의 운세 정보 DTO, 없거나 준비되지 않았으면 null
+     * @return List<ZodiacLuckDataDto> 해당 날짜의 모든 운세 정보 DTO 리스트, 없거나 준비되지 않았으면 빈 리스트
      */
     @Transactional(readOnly = true)
-    fun getLuckForZodiacSign(requestDate: LocalDate, zodiacName: String): ZodiacLuckDataDto? { // 메소드명 및 반환타입 변경
-        logger.debug("Attempting to fetch luck for date: {} and zodiac: {}", requestDate, zodiacName) // 로그 메시지 변경
+    fun getAllLucksForDate(requestDate: LocalDate): List<ZodiacLuckDataDto> {
+        logger.debug("Attempting to fetch all lucks for date: {}", requestDate)
 
         val logEntryOpt = dailyLuckLogRepository.findByRequestDate(requestDate)
         if (logEntryOpt.isEmpty) {
-            logger.warn("No luck log found for date: {}", requestDate) // 로그 메시지 변경
-            return null
+            logger.warn("No luck log found for date: {}", requestDate)
+            return emptyList()
         }
 
         val logEntry = logEntryOpt.get()
-        if (logEntry.parsingStatus != LuckParsingStatus.SUCCESS) { // 열거형 이름 변경
+        if (logEntry.parsingStatus != LuckParsingStatus.SUCCESS) {
             logger.warn(
                 "Luck log for date: {} is not yet successfully processed. Status: {}",
                 requestDate,
                 logEntry.parsingStatus
-            ) // 로그 메시지 변경
+            )
+            return emptyList()
+        }
+
+        return logEntry.luckEntries.map { luckEntity ->
+            ZodiacLuckDataDto.fromEntity(luckEntity, requestDate, objectMapper)
+        }
+    }
+
+    /**
+     * 특정 날짜와 띠 이름에 해당하는 운세 정보를 조회합니다. (기존 메소드는 유지)
+     */
+    @Transactional(readOnly = true)
+    fun getLuckForZodiacSign(requestDate: LocalDate, zodiacName: String): ZodiacLuckDataDto? {
+        logger.debug("Attempting to fetch luck for date: {} and zodiac: {}", requestDate, zodiacName)
+
+        val logEntryOpt = dailyLuckLogRepository.findByRequestDate(requestDate)
+        if (logEntryOpt.isEmpty) {
+            logger.warn("No luck log found for date: {}", requestDate)
+            return null
+        }
+
+        val logEntry = logEntryOpt.get()
+        if (logEntry.parsingStatus != LuckParsingStatus.SUCCESS) {
+            logger.warn(
+                "Luck log for date: {} is not yet successfully processed. Status: {}",
+                requestDate,
+                logEntry.parsingStatus
+            )
             return null
         }
 
         val specificLuckEntity =
-            logEntry.luckEntries.find { it.zodiacName.equals(zodiacName, ignoreCase = true) } // 필드명 변경
+            logEntry.luckEntries.find { it.zodiacName.equals(zodiacName, ignoreCase = true) }
 
         return if (specificLuckEntity != null) {
-            logger.info("Found luck for date: {} and zodiac: {}", requestDate, zodiacName) // 로그 메시지 변경
-            ZodiacLuckDataDto.fromEntity(specificLuckEntity, requestDate, objectMapper) // DTO 이름 변경
+            logger.info("Found luck for date: {} and zodiac: {}", requestDate, zodiacName)
+            ZodiacLuckDataDto.fromEntity(specificLuckEntity, requestDate, objectMapper)
         } else {
             logger.warn(
                 "Luck data for zodiac: {} not found within the log for date: {}",
                 zodiacName,
                 requestDate
-            ) // 로그 메시지 변경
+            )
             null
         }
     }

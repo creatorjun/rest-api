@@ -56,13 +56,6 @@ data class ForecastPeriodSummary(
     val probability: Double
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class MinuteForecastDto(
-    val startTime: String,
-    val precipitationChance: Double,
-    val precipitationIntensity: Double
-)
-
 // 일일 예보 (forecastDaily) DTO
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class DailyForecastDto(

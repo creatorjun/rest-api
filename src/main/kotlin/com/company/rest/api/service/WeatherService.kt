@@ -1,7 +1,7 @@
 package com.company.rest.api.service
 
 import com.company.rest.api.config.LocationDetails
-import com.company.rest.api.dto.WeatherKitResponse
+import com.company.rest.api.dto.*
 import com.company.rest.api.entity.CurrentWeather
 import com.company.rest.api.entity.DailyWeatherForecast
 import com.company.rest.api.entity.HourlyForecast
@@ -68,11 +68,8 @@ class WeatherService(
         val keySpec = PKCS8EncodedKeySpec(privateKeyBytes)
         val keyFactory = KeyFactory.getInstance("EC")
         val privateKey: PrivateKey = keyFactory.generatePrivate(keySpec)
-
         val now = Date()
         val expiry = Date(now.time + 3600 * 1000)
-
-        // --- Deprecated 경고를 해결하기 위해 최신 jjwt API 스타일로 변경 ---
         val jwt = Jwts.builder()
             .header()
             .keyId(keyId)
@@ -84,14 +81,11 @@ class WeatherService(
             .expiration(expiry)
             .signWith(privateKey, Jwts.SIG.ES256)
             .compact()
-        // --- 여기까지 ---
-
         cachedJwt = jwt
         jwtExpiryTime = expiry.toInstant().atZone(ZoneOffset.UTC).toLocalDateTime().minusMinutes(1)
         return jwt
     }
 
-    // ... 나머지 메소드들은 동일 ...
     @Transactional
     fun fetchAndStoreCurrentWeather() {
         logger.info("Starting to fetch and store current weather for all locations.")
@@ -172,6 +166,7 @@ class WeatherService(
                     .retrieve()
                     .bodyToMono(WeatherKitResponse::class.java)
                     .block()
+
                 response?.forecastDaily?.days?.let { dailyForecastsDto ->
                     if (dailyForecastsDto.isNotEmpty()) {
                         dailyWeatherForecastRepository.deleteAllByLatitudeAndLongitude(
@@ -208,16 +203,23 @@ class WeatherService(
         }
     }
 
-    fun getCombinedWeather(latitude: Double, longitude: Double): Any {
-        logger.info("Fetching combined weather data for lat: {}, lon: {}", latitude, longitude)
-        val currentWeather = currentWeatherRepository.findByLatitudeAndLongitude(latitude, longitude)
-        val hourlyForecast = hourlyForecastRepository.findByLatitudeAndLongitude(latitude, longitude)
-        val dailyForecasts =
+    fun getWeatherForLocation(latitude: Double, longitude: Double): WeatherResponseDto {
+        logger.info("Fetching weather data from DB for lat: {}, lon: {}", latitude, longitude)
+
+        val currentWeatherEntity = currentWeatherRepository.findByLatitudeAndLongitude(latitude, longitude)
+        val hourlyForecastEntity = hourlyForecastRepository.findByLatitudeAndLongitude(latitude, longitude)
+        val dailyForecastEntities =
             dailyWeatherForecastRepository.findByLatitudeAndLongitudeOrderByForecastDateAsc(latitude, longitude)
-        return mapOf(
-            "current" to currentWeather,
-            "hourly" to hourlyForecast,
-            "daily" to dailyForecasts
+
+        val currentWeatherDto = currentWeatherEntity.map { CurrentWeatherResponseDto.fromEntity(it) }.orElse(null)
+        val hourlyForecastDto =
+            hourlyForecastEntity.map { HourlyForecastResponseDto.fromEntity(it, objectMapper) }.orElse(null)
+        val dailyForecastsDto = dailyForecastEntities.map { DailyWeatherForecastResponseDto.fromEntity(it) }
+
+        return WeatherResponseDto(
+            currentWeather = currentWeatherDto,
+            hourlyForecast = hourlyForecastDto,
+            dailyForecast = dailyForecastsDto
         )
     }
 }
