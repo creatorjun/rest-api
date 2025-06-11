@@ -34,15 +34,17 @@ class SecurityConfig(
             .authorizeHttpRequests { authorize ->
                 authorize
                     // 1. 관리자용 엔드포인트
-                    .requestMatchers("/api/v1/amdin/**")
-                    .access { _, context ->
-                        val request: HttpServletRequest = context.request
-                        val isLocalhost = IpAddressMatcher("127.0.0.1").matches(request) ||
-                                IpAddressMatcher("::1").matches(request)
-                        AuthorizationDecision(isLocalhost)
-                    }
+//                    .requestMatchers("/api/v1/amdin/**")
+//                    .access { _, context ->
+//                        val request: HttpServletRequest = context.request
+//                        val isLocalhost = IpAddressMatcher("127.0.0.1").matches(request) ||
+//                                IpAddressMatcher("::1").matches(request)
+//                        AuthorizationDecision(isLocalhost)
+//                    }
                     // 2. 사용자용 엔드포인트
                     .requestMatchers("/api/v1/auth/**").permitAll()
+                    .requestMatchers("/api/v1/admin/**").permitAll()
+
                     .requestMatchers("/ws/**").permitAll()
                     .anyRequest().authenticated()
             }

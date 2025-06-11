@@ -28,7 +28,7 @@ data class CurrentWeatherDto(
     val temperatureApparent: Double,
     val conditionCode: String,
     val humidity: Double,
-    val wind: WindDto,
+    val wind: WindDto?,
     val uvIndex: Int
 )
 
@@ -73,7 +73,7 @@ data class DayWeatherForecastDto(
     val precipitationChance: Double,
     val precipitationAmount: Double,
     val humidity: Double,
-    val wind: WindDto,
+    val wind: WindDto?,
     val uvIndex: UvIndexDto,
     val sunrise: String?,
     val sunset: String?,
@@ -87,7 +87,7 @@ data class DayPartForecastDto(
     val conditionCode: String,
     val precipitationChance: Double,
     val precipitationAmount: Double,
-    val wind: WindDto
+    val wind: WindDto?
 )
 
 // UV 지수 상세 DTO

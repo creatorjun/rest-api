@@ -13,11 +13,11 @@ import io.jsonwebtoken.Jwts
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.io.ClassPathResource
 import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.reactive.function.client.WebClient
+import java.io.FileInputStream
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.PrivateKey
@@ -59,8 +59,8 @@ class WeatherService(
             return cachedJwt!!
         }
         logger.info("Generating new WeatherKit JWT...")
-        val privateKeyFile = ClassPathResource(keyPath)
-        val privateKeyPem = privateKeyFile.inputStream.readBytes().toString(StandardCharsets.UTF_8)
+        val privateKeyInputStream = FileInputStream(keyPath) // 수정된 코드
+        val privateKeyPem = privateKeyInputStream.readBytes().toString(StandardCharsets.UTF_8)
             .replace("-----BEGIN PRIVATE KEY-----", "")
             .replace("-----END PRIVATE KEY-----", "")
             .replace("\\s".toRegex(), "")
@@ -108,7 +108,7 @@ class WeatherService(
                         apparentTemperature = weatherDto.temperatureApparent,
                         conditionCode = weatherDto.conditionCode,
                         humidity = weatherDto.humidity,
-                        windSpeed = weatherDto.wind.speed,
+                        windSpeed = weatherDto.wind?.speed ?: 0.0,
                         uvIndex = weatherDto.uvIndex
                     )
                     currentWeatherRepository.save(newCurrentWeather)
@@ -187,7 +187,7 @@ class WeatherService(
                                 weatherPm = dayDto.overnightForecast?.conditionCode ?: dayDto.conditionCode,
                                 rainProb = dayDto.precipitationChance,
                                 humidity = dayDto.humidity,
-                                windSpeed = dayDto.wind.speed,
+                                windSpeed = dayDto.wind?.speed,
                                 uvIndex = dayDto.uvIndex.value,
                                 sunrise = dayDto.sunrise,
                                 sunset = dayDto.sunset
