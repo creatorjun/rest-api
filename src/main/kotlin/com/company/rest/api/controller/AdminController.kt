@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
@@ -22,6 +23,18 @@ class AdminController(
 ) {
     private val logger = LoggerFactory.getLogger(AdminController::class.java)
     private val KOREA_ZONE_ID = ZoneId.of("Asia/Seoul")
+
+    // --- 이 부분을 추가해주세요 ---
+    @Operation(
+        summary = "서버 상태 확인용 Ping (테스트용)",
+        description = "서버가 정상적으로 요청을 받고 응답하는지 확인하는 간단한 엔드포인트입니다."
+    )
+    @GetMapping("/ping")
+    fun ping(): ResponseEntity<String> {
+        logger.info("Admin 'ping' endpoint was called successfully!")
+        return ResponseEntity.ok("Pong!")
+    }
+    // --------------------------
 
     // --- Weather Admin Endpoints ---
     @Operation(
