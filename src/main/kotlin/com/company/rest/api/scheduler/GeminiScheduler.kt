@@ -18,7 +18,7 @@ class GeminiScheduler( // 클래스 이름은 유지 (Gemini 관련 스케줄러
     /**
      * 매일 오전 9시에 실행되어 오늘의 띠별 운세(행운)를 제미나이로부터 가져와 DB에 저장합니다. (한국 시간 기준)
      */
-    @Scheduled(cron = "0 0 9 * * ?", zone = "Asia/Seoul") // 매일 오전 9시
+    @Scheduled(cron = "0 0 0 * * ?", zone = "Asia/Seoul") // 매일 자정
     fun fetchDailyLuckTask() { // 메소드명 변경
         val currentTime = LocalDateTime.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val today = LocalDate.now(ZoneId.of("Asia/Seoul"))

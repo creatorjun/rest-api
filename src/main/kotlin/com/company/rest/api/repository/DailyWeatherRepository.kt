@@ -17,7 +17,10 @@ interface DailyWeatherForecastRepository : JpaRepository<DailyWeatherForecast, S
      * @param longitude 조회할 경도
      * @return List<DailyWeatherForecast>
      */
-    fun findByLatitudeAndLongitudeOrderByForecastDateAsc(latitude: Double, longitude: Double): List<DailyWeatherForecast>
+    fun findByLatitudeAndLongitudeOrderByForecastDateAsc(
+        latitude: Double,
+        longitude: Double
+    ): List<DailyWeatherForecast>
 
     /**
      * 특정 위도와 경도에 해당하는 모든 일일 예보 정보를 삭제합니다.

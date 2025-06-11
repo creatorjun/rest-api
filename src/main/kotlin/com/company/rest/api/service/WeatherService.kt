@@ -145,7 +145,10 @@ class WeatherService(
                         longitude = location.longitude,
                         summary = forecastDto.summary?.firstOrNull()?.condition,
                         minutesJson = objectMapper.writeValueAsString(forecastDto.minutes),
-                        forecastExpireTime = LocalDateTime.parse(forecastDto.metadata.expireTime, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                        forecastExpireTime = LocalDateTime.parse(
+                            forecastDto.metadata.expireTime,
+                            DateTimeFormatter.ISO_OFFSET_DATE_TIME
+                        )
                     )
                     hourlyForecastRepository.save(newHourlyForecast)
                     logger.info("Successfully processed hourly forecast for ${location.cityName}")
@@ -171,12 +174,18 @@ class WeatherService(
                     .block()
                 response?.forecastDaily?.days?.let { dailyForecastsDto ->
                     if (dailyForecastsDto.isNotEmpty()) {
-                        dailyWeatherForecastRepository.deleteAllByLatitudeAndLongitude(location.latitude, location.longitude)
+                        dailyWeatherForecastRepository.deleteAllByLatitudeAndLongitude(
+                            location.latitude,
+                            location.longitude
+                        )
                         val newForecastEntities = dailyForecastsDto.map { dayDto ->
                             DailyWeatherForecast(
                                 latitude = location.latitude,
                                 longitude = location.longitude,
-                                forecastDate = LocalDate.parse(dayDto.forecastStart, DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+                                forecastDate = LocalDate.parse(
+                                    dayDto.forecastStart,
+                                    DateTimeFormatter.ISO_OFFSET_DATE_TIME
+                                ),
                                 minTemp = dayDto.temperatureMin,
                                 maxTemp = dayDto.temperatureMax,
                                 weatherAm = dayDto.daytimeForecast?.conditionCode ?: dayDto.conditionCode,
@@ -203,7 +212,8 @@ class WeatherService(
         logger.info("Fetching combined weather data for lat: {}, lon: {}", latitude, longitude)
         val currentWeather = currentWeatherRepository.findByLatitudeAndLongitude(latitude, longitude)
         val hourlyForecast = hourlyForecastRepository.findByLatitudeAndLongitude(latitude, longitude)
-        val dailyForecasts = dailyWeatherForecastRepository.findByLatitudeAndLongitudeOrderByForecastDateAsc(latitude, longitude)
+        val dailyForecasts =
+            dailyWeatherForecastRepository.findByLatitudeAndLongitudeOrderByForecastDateAsc(latitude, longitude)
         return mapOf(
             "current" to currentWeather,
             "hourly" to hourlyForecast,
