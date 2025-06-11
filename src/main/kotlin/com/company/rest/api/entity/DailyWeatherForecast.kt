@@ -8,7 +8,8 @@ import java.util.*
 @Entity
 @Table(
     name = "daily_weather_forecasts", indexes = [
-        Index(name = "idx_weather_forecast_date_region", columnList = "forecast_date, region_code")
+        // 위치 기반 조회를 위해 위도와 경도에 인덱스 추가
+        Index(name = "idx_weather_location_date", columnList = "latitude, longitude, forecast_date")
     ]
 )
 data class DailyWeatherForecast(
@@ -16,28 +17,23 @@ data class DailyWeatherForecast(
     @Column(name = "id", unique = true, nullable = false, updatable = false)
     val id: String = UUID.randomUUID().toString(),
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "log_entry_id",
-        nullable = true,
-        foreignKey = ForeignKey(name = "fk_weather_forecast_log_entry")
-    ) // nullable = false -> true 로 변경
-    var logEntry: WeatherApiLog? = null,
+    // 위치 정보를 위도와 경도로 저장
+    @Column(name = "latitude", nullable = false)
+    val latitude: Double,
 
-    @Column(name = "region_code", nullable = false)
-    val regionCode: String,
+    @Column(name = "longitude", nullable = false)
+    val longitude: Double,
 
-    @Column(name = "region_name", nullable = true)
-    val regionName: String?,
+    // regionName 필드 삭제됨
 
     @Column(name = "forecast_date", nullable = false)
     val forecastDate: LocalDate,
 
     @Column(name = "min_temp", nullable = true)
-    var minTemp: Int? = null,
+    var minTemp: Double? = null,
 
     @Column(name = "max_temp", nullable = true)
-    var maxTemp: Int? = null,
+    var maxTemp: Double? = null,
 
     @Column(name = "weather_am", length = 100, nullable = true)
     var weatherAm: String? = null,
@@ -45,11 +41,23 @@ data class DailyWeatherForecast(
     @Column(name = "weather_pm", length = 100, nullable = true)
     var weatherPm: String? = null,
 
-    @Column(name = "rain_prob_am", nullable = true)
-    var rainProbAm: Int? = null,
+    @Column(name = "rain_prob", nullable = true)
+    var rainProb: Double? = null,
 
-    @Column(name = "rain_prob_pm", nullable = true)
-    var rainProbPm: Int? = null,
+    @Column(name = "humidity", nullable = true)
+    var humidity: Double? = null,
+
+    @Column(name = "wind_speed", nullable = true)
+    var windSpeed: Double? = null,
+
+    @Column(name = "uv_index", nullable = true)
+    var uvIndex: Int? = null,
+
+    @Column(name = "sunrise", nullable = true)
+    var sunrise: String? = null,
+
+    @Column(name = "sunset", nullable = true)
+    var sunset: String? = null,
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: LocalDateTime = LocalDateTime.now(),

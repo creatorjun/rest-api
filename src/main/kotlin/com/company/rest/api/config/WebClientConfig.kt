@@ -2,7 +2,6 @@ package com.company.rest.api.config
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
@@ -11,12 +10,6 @@ import org.springframework.web.reactive.function.client.WebClient
 
 @Configuration
 class WebClientConfig {
-
-    @Value("\${weather.api.url}")
-    private lateinit var kmaApiBaseUrl: String
-
-    // KMA WebClient 요청 로깅을 위한 Logger
-    private val kmaClientLogger = LoggerFactory.getLogger("KmaWeatherWebClient")
 
     @Bean
     @Qualifier("naverWebClient")
@@ -39,11 +32,10 @@ class WebClientConfig {
     }
 
     @Bean
-    @Qualifier("kmaWeatherWebClient")
-    fun kmaWeatherWebClient(): WebClient {
+    @Qualifier("weatherKitWebClient") // WeatherKit 전용 WebClient 추가
+    fun weatherKitWebClient(): WebClient {
         return WebClient.builder()
-            .baseUrl(kmaApiBaseUrl)
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .baseUrl("https://weatherkit.apple.com") // Apple WeatherKit API 기본 URL
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .build()
     }
