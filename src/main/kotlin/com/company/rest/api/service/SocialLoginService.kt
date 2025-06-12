@@ -14,11 +14,11 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
-import org.springframework.security.crypto.password.PasswordEncoder // PasswordEncoder 임포트
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
+import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -30,13 +30,19 @@ class SocialLoginService(
     @Qualifier("kakaoWebClient") private val kakaoWebClient: WebClient,
     private val userRepository: UserRepository,
     private val jwtTokenProvider: JwtTokenProvider,
-    private val passwordEncoder: PasswordEncoder, // PasswordEncoder 주입
     @Value("\${jwt.refresh-expiration-ms}") private val jwtRefreshExpirationMs: Long
 ) {
     private val logger = LoggerFactory.getLogger(SocialLoginService::class.java)
     private val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
     private data class VerifiedSocialUser(val originalId: String, val nickname: String?)
+
+    private fun sha256(input: String): String {
+        val bytes = input.toByteArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+        return digest.fold("") { str, it -> str + "%02x".format(it) }
+    }
 
     @Transactional
     fun processLogin(request: SocialLoginRequestDto): Mono<AuthResponseDto> {
@@ -49,14 +55,13 @@ class SocialLoginService(
                     )
                 }
 
-                // BCrypt를 사용하여 해싱
-                val hashedOriginalId = passwordEncoder.encode(verifiedUser.originalId)
+                val hashedOriginalId = sha256(verifiedUser.originalId)
 
                 logger.info(
                     "Social login attempt. Provider: {}, ClientSentOriginalID: {}, HashedOriginalIDForDB: {}, VerifiedOriginalID: {}",
                     request.platform,
                     request.id,
-                    hashedOriginalId.take(10) + "...", // BCrypt 해시는 매번 달라지므로 로그는 참고용
+                    hashedOriginalId.take(10) + "...",
                     verifiedUser.originalId.take(10) + "..."
                 )
 
@@ -76,7 +81,7 @@ class SocialLoginService(
                     val newUser = User(
                         nickname = finalNickname,
                         loginProvider = request.platform,
-                        providerId = hashedOriginalId // 해싱된 ID 저장
+                        providerId = hashedOriginalId
                     )
                     userRepository.save(newUser)
                 }
