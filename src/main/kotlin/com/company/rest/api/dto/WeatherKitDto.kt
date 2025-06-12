@@ -74,7 +74,7 @@ data class DayWeatherForecastDto(
     val precipitationAmount: Double,
     val humidity: Double,
     val wind: WindDto?,
-    val uvIndex: UvIndexDto,
+    val uvIndex: UvIndexDto?,
     val sunrise: String?,
     val sunset: String?,
     val daytimeForecast: DayPartForecastDto?,
