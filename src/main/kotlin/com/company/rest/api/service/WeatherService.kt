@@ -1,5 +1,6 @@
 package com.company.rest.api.service
 
+import com.company.rest.api.config.AppleWeatherProperties // 임포트 추가
 import com.company.rest.api.config.LocationDetails
 import com.company.rest.api.dto.*
 import com.company.rest.api.entity.CurrentWeather
@@ -12,7 +13,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.jsonwebtoken.Jwts
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -35,21 +35,10 @@ class WeatherService(
     private val hourlyForecastRepository: HourlyForecastRepository,
     private val dailyWeatherForecastRepository: DailyWeatherForecastRepository,
     private val locations: List<LocationDetails>,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val appleWeatherProperties: AppleWeatherProperties // AppleWeatherProperties 주입
 ) {
     private val logger = LoggerFactory.getLogger(WeatherService::class.java)
-
-    @Value("\${apple.weather.team-id}")
-    private lateinit var teamId: String
-
-    @Value("\${apple.weather.key-id}")
-    private lateinit var keyId: String
-
-    @Value("\${apple.weather.service-id}")
-    private lateinit var serviceId: String
-
-    @Value("\${apple.weather.key-path}")
-    private lateinit var keyPath: String
 
     private var cachedJwt: String? = null
     private var jwtExpiryTime: LocalDateTime? = null
@@ -59,7 +48,8 @@ class WeatherService(
             return cachedJwt!!
         }
         logger.info("Generating new WeatherKit JWT...")
-        val privateKeyInputStream = FileInputStream(keyPath) // 수정된 코드
+        // 프로퍼티 사용
+        val privateKeyInputStream = FileInputStream(appleWeatherProperties.keyPath)
         val privateKeyPem = privateKeyInputStream.readBytes().toString(StandardCharsets.UTF_8)
             .replace("-----BEGIN PRIVATE KEY-----", "")
             .replace("-----END PRIVATE KEY-----", "")
@@ -70,13 +60,15 @@ class WeatherService(
         val privateKey: PrivateKey = keyFactory.generatePrivate(keySpec)
         val now = Date()
         val expiry = Date(now.time + 3600 * 1000)
+
+        // 프로퍼티 사용
         val jwt = Jwts.builder()
             .header()
-            .keyId(keyId)
-            .add("id", "$teamId.$serviceId")
+            .keyId(appleWeatherProperties.keyId)
+            .add("id", "${appleWeatherProperties.teamId}.${appleWeatherProperties.serviceId}")
             .and()
-            .issuer(teamId)
-            .subject(serviceId)
+            .issuer(appleWeatherProperties.teamId)
+            .subject(appleWeatherProperties.serviceId)
             .issuedAt(now)
             .expiration(expiry)
             .signWith(privateKey, Jwts.SIG.ES256)
@@ -86,6 +78,7 @@ class WeatherService(
         return jwt
     }
 
+    // ... (이하 fetchAndStore... 및 getWeatherForLocation 메소드는 동일)
     @Transactional
     fun fetchAndStoreCurrentWeather() {
         logger.info("Starting to fetch and store current weather for all locations.")

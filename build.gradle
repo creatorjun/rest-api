@@ -37,7 +37,6 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.12.5' // 또는 최신 안정 버전
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5' // 또는 jackson 대신 gson/org.json 사용 가능
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0' // 또는 최신 안정 버전
     implementation("io.netty:netty-resolver-dns-native-macos:4.1.119.Final:osx-x86_64") // 사용 중인 Netty 버전과 맞추세요
 
     // Kotlin 기본 라이브러리

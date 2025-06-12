@@ -28,26 +28,11 @@ class GeminiService(
     @Value("\${gemini.model.name}")
     private lateinit var modelName: String
 
+    // 외부 프로퍼티 주입
+    @Value("\${gemini.api.prompt}")
+    private lateinit var dailyLuckQuestion: String
+
     private lateinit var client: Client
-
-    private val dailyLuckQuestion: String =
-        """이제부터 넌 세계 최고의 점성술사 / 사주풀이 / 타로 마스터 전문가야. 별자리 사주풀이 운세 띠별운세 타로카드 명리학 동양철학 및 점성술에 관한 모든 사항을 완벽하게 숙지해서 다음 물음에 답변해줘 단, 너무 띠와 연관지어 생각하지 말고, 매번 다른 답변을 생성하는데 주력해야해. 1950년 이후 출생한 사람들에대한 띠별 운세를 각 띠별로 묶어서 오늘의 운세를 다음과 같은 형식을 갖는 json 파일로 줘
-
-{
-  "띠별운세": [
-    {
-      "띠": "쥐띠",
-      "해당년도": ["1960년", "1972년", "1984년", "1996년", "2008년", "2020년"],
-      "오늘의운세": "매우 긍정적인 하루가 될 것입니다. 새로운 기회가 찾아오며, 주변 사람들과의 관계도 원만할 것으로 보입니다.",
-      "금전운": "예상치 못한 수입이 생길 수 있으나, 충동적인 지출은 피하는 것이 좋습니다. 전반적으로 안정적입니다.",
-      "애정운": "연인과의 관계가 더욱 깊어지거나, 새로운 인연을 만날 가능성이 높습니다. 솔직한 마음을 표현하세요.",
-      "건강운": "가벼운 스트레칭이나 산책으로 컨디션을 조절하는 것이 좋습니다. 전반적으로 양호합니다.",
-      "행운의숫자": 7,
-      "행운의색상": "파란색",
-      "오늘의조언": "긍정적인 마음으로 하루를 시작하고, 찾아오는 기회를 놓치지 마세요."
-    }
-  ]
-}"""
 
     @PostConstruct
     fun init() {
@@ -95,7 +80,7 @@ class GeminiService(
         var logEntry = dailyLuckLogRepository.findByRequestDate(requestDate).orElseGet {
             DailyLuckLog(
                 requestDate = requestDate,
-                questionAsked = dailyLuckQuestion,
+                questionAsked = dailyLuckQuestion, // 주입받은 프로퍼티 사용
                 parsingStatus = LuckParsingStatus.PENDING,
                 createdAt = LocalDateTime.now(),
                 updatedAt = LocalDateTime.now()
@@ -114,7 +99,7 @@ class GeminiService(
         logEntry.updatedAt = LocalDateTime.now()
         logEntry = dailyLuckLogRepository.save(logEntry)
 
-        val rawResponse = askGemini(dailyLuckQuestion)
+        val rawResponse = askGemini(dailyLuckQuestion) // 주입받은 프로퍼티 사용
         logEntry.rawResponse = rawResponse
         logEntry.updatedAt = LocalDateTime.now()
 
@@ -236,13 +221,6 @@ class GeminiService(
         }
     }
 
-    // --- 이 메소드들이 수정 및 추가되었습니다 ---
-
-    /**
-     * 특정 날짜의 모든 띠별 운세 정보를 조회합니다.
-     * @param requestDate 조회할 날짜
-     * @return List<ZodiacLuckDataDto> 해당 날짜의 모든 운세 정보 DTO 리스트, 없거나 준비되지 않았으면 빈 리스트
-     */
     @Transactional(readOnly = true)
     fun getAllLucksForDate(requestDate: LocalDate): List<ZodiacLuckDataDto> {
         logger.debug("Attempting to fetch all lucks for date: {}", requestDate)
@@ -268,9 +246,6 @@ class GeminiService(
         }
     }
 
-    /**
-     * 특정 날짜와 띠 이름에 해당하는 운세 정보를 조회합니다. (기존 메소드는 유지)
-     */
     @Transactional(readOnly = true)
     fun getLuckForZodiacSign(requestDate: LocalDate, zodiacName: String): ZodiacLuckDataDto? {
         logger.debug("Attempting to fetch luck for date: {} and zodiac: {}", requestDate, zodiacName)
