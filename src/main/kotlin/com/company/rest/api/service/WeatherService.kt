@@ -94,12 +94,14 @@ class WeatherService(
 
                 response?.currentWeather?.let { weatherDto ->
                     // 1. 위도/경도로 기존 데이터를 조회합니다.
-                    val existingWeather = currentWeatherRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
+                    val existingWeather =
+                        currentWeatherRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
 
                     if (existingWeather.isPresent) {
                         // 2. 데이터가 있으면, 기존 엔티티의 값을 업데이트합니다.
                         val weatherToUpdate = existingWeather.get()
-                        weatherToUpdate.measuredAt = LocalDateTime.parse(weatherDto.asOf, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                        weatherToUpdate.measuredAt =
+                            LocalDateTime.parse(weatherDto.asOf, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
                         weatherToUpdate.temperature = weatherDto.temperature
                         weatherToUpdate.apparentTemperature = weatherDto.temperatureApparent
                         weatherToUpdate.conditionCode = weatherDto.conditionCode
@@ -146,7 +148,8 @@ class WeatherService(
 
                 response?.forecastNextHour?.let { forecastDto ->
                     // 1. 위도/경도로 기존 데이터를 조회합니다.
-                    val existingForecast = hourlyForecastRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
+                    val existingForecast =
+                        hourlyForecastRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
 
                     if (existingForecast.isPresent) {
                         // 2. 데이터가 있으면, 기존 엔티티의 값을 업데이트합니다.
