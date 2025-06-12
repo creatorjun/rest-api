@@ -4,8 +4,7 @@ import com.company.rest.api.dto.EventCreateRequestDto
 import com.company.rest.api.dto.EventIdRequestDto
 import com.company.rest.api.dto.EventResponseDto
 import com.company.rest.api.dto.EventUpdateRequestDto
-import com.company.rest.api.exception.CustomException
-import com.company.rest.api.exception.ErrorCode
+import com.company.rest.api.security.UserId
 import com.company.rest.api.service.EventService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -20,7 +19,6 @@ import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
@@ -56,13 +54,9 @@ class EventController(
     fun createEvent(
         @Valid @SwaggerRequestBody(description = "생성할 이벤트 정보") @RequestBody
         eventCreateRequestDto: EventCreateRequestDto,
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?
+        @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<EventResponseDto> {
-        if (userUid == null) {
-            logger.warn("Event creation attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
-        logger.info("Event creation authorized for user UID: $userUid (from @AuthenticationPrincipal)")
+        logger.info("Event creation authorized for user UID: $userUid (from @UserId annotation)")
         val createdEvent = eventService.createEvent(eventCreateRequestDto, userUid)
         return ResponseEntity.status(HttpStatus.CREATED).body(createdEvent)
     }
@@ -90,12 +84,8 @@ class EventController(
     @ApiResponse(responseCode = "401", description = "인증 실패")
     @GetMapping
     fun getMyEvents(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?
+        @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<List<EventResponseDto>> {
-        if (userUid == null) {
-            logger.warn("Get my events attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         val events = eventService.getEventsForUser(userUid)
         return ResponseEntity.ok(events)
     }
@@ -123,14 +113,10 @@ class EventController(
     @ApiResponse(responseCode = "404", description = "수정할 이벤트를 찾을 수 없음")
     @PutMapping
     fun updateMyEvent(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "수정할 이벤트 정보 (eventId 포함)") @RequestBody
         eventUpdateRequestDto: EventUpdateRequestDto
     ): ResponseEntity<EventResponseDto> {
-        if (userUid == null) {
-            logger.warn("Update event attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         val updatedEvent = eventService.updateEvent(userUid, eventUpdateRequestDto)
         return ResponseEntity.ok(updatedEvent)
     }
@@ -155,14 +141,10 @@ class EventController(
     @ApiResponse(responseCode = "404", description = "삭제할 이벤트를 찾을 수 없음")
     @DeleteMapping
     fun deleteMyEvent(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "삭제할 이벤트의 ID") @RequestBody
         eventIdRequestDto: EventIdRequestDto
     ): ResponseEntity<Void> {
-        if (userUid == null) {
-            logger.warn("Delete event attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         eventService.deleteEvent(userUid, eventIdRequestDto.eventId)
         return ResponseEntity.noContent().build()
     }

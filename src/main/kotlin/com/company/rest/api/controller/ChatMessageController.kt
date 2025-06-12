@@ -3,6 +3,7 @@ package com.company.rest.api.controller
 import com.company.rest.api.dto.PaginatedChatMessagesResponseDto
 import com.company.rest.api.exception.CustomException
 import com.company.rest.api.exception.ErrorCode
+import com.company.rest.api.security.UserId
 import com.company.rest.api.service.ChatService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -15,7 +16,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -30,7 +30,7 @@ class ChatMessageController(
     @GetMapping("/with/{otherUserUid}/messages")
     @Operation(summary = "특정 사용자와의 채팅 메시지 조회 (페이징)", description = "이전 메시지를 로드하기 위한 커서 기반 페이징을 지원합니다.")
     fun getChatMessagesWithUser(
-        @Parameter(hidden = true) @AuthenticationPrincipal currentUserUid: String?,
+        @Parameter(hidden = true) @UserId currentUserUid: String,
         @Parameter(description = "대화 상대방의 사용자 UID", required = true) @PathVariable otherUserUid: String,
         @Parameter(
             description = "이 타임스탬프(epoch milliseconds) 이전의 메시지를 조회합니다. 이전 페이지를 로드할 때 사용됩니다. (선택 사항, 첫 페이지 로드 시에는 생략)",
@@ -40,9 +40,6 @@ class ChatMessageController(
         @Parameter(description = "한 번에 가져올 메시지 개수. 기본값 20, 최대 100.", required = false)
         @RequestParam(defaultValue = "20") size: Int
     ): ResponseEntity<PaginatedChatMessagesResponseDto> {
-        if (currentUserUid == null) {
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         if (currentUserUid == otherUserUid) {
             logger.warn("User {} attempted to fetch chat messages with themselves.", currentUserUid)
             throw CustomException(ErrorCode.INVALID_INPUT_VALUE)
@@ -67,12 +64,9 @@ class ChatMessageController(
     @DeleteMapping("/messages/{messageId}")
     @Operation(summary = "채팅 메시지 삭제", description = "자신이 보낸 특정 채팅 메시지를 논리적으로 삭제합니다.")
     fun deleteChatMessage(
-        @Parameter(hidden = true) @AuthenticationPrincipal currentUserUid: String?,
+        @Parameter(hidden = true) @UserId currentUserUid: String,
         @Parameter(description = "삭제할 메시지의 ID", required = true) @PathVariable messageId: String
     ): ResponseEntity<Void> {
-        if (currentUserUid == null) {
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         logger.info("User UID: {} attempting to delete message ID: {}", currentUserUid, messageId)
         chatService.deleteMessage(currentUserUid, messageId)
         return ResponseEntity.noContent().build()
@@ -91,17 +85,13 @@ class ChatMessageController(
         )]
     )
     fun searchChatMessages(
-        @Parameter(hidden = true) @AuthenticationPrincipal currentUserUid: String?,
+        @Parameter(hidden = true) @UserId currentUserUid: String,
         @Parameter(description = "대화 상대방의 사용자 UID", required = true) @PathVariable otherUserUid: String,
         @Parameter(description = "검색할 키워드", required = true) @RequestParam keyword: String,
         @PageableDefault(size = 20, sort = ["createdAt,desc"])
         @Parameter(description = "페이징 정보 (예: page=0&size=20).")
         pageable: Pageable
     ): ResponseEntity<PaginatedChatMessagesResponseDto> {
-        if (currentUserUid == null) {
-            logger.warn("searchChatMessages: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         if (keyword.isBlank()) {
             logger.warn("searchChatMessages: Search keyword is blank for conversation with {}", otherUserUid)
         }

@@ -1,8 +1,7 @@
 package com.company.rest.api.controller
 
 import com.company.rest.api.dto.*
-import com.company.rest.api.exception.CustomException
-import com.company.rest.api.exception.ErrorCode
+import com.company.rest.api.security.UserId
 import com.company.rest.api.service.UserService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -14,7 +13,6 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
@@ -37,14 +35,10 @@ class UserController(
     @ApiResponse(responseCode = "401", description = "인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun updateMyFcmToken(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "등록할 FCM 토큰 정보") @RequestBody
         fcmTokenRequestDto: FcmTokenRequestDto
     ): ResponseEntity<Void> {
-        if (userUid == null) {
-            logger.warn("FCM token update attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         logger.info("User UID: {} attempting to update FCM token.", userUid)
         userService.updateFcmToken(userUid, fcmTokenRequestDto.fcmToken)
         return ResponseEntity.ok().build()
@@ -67,15 +61,10 @@ class UserController(
     @ApiResponse(responseCode = "401", description = "비밀번호 불일치 또는 인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun verifyMyAppPassword(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody @RequestBody requestDto: AppPasswordVerificationRequestDto
     ): ResponseEntity<AppPasswordVerificationResponseDto> {
-        if (userUid == null) {
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
-        // 이제 service에서 성공 시 true를, 실패 시 예외를 던지므로, 반환값을 확인할 필요가 없음
         userService.verifyAppPassword(userUid, requestDto.appPassword)
-        // 예외가 발생하지 않았다면 성공한 것임
         return ResponseEntity.ok(AppPasswordVerificationResponseDto(isVerified = true, message = "앱 비밀번호가 확인되었습니다."))
     }
 
@@ -102,13 +91,10 @@ class UserController(
     @ApiResponse(responseCode = "401", description = "인증 실패 (예: 현재 앱 비밀번호 불일치)")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun updateMyAccount(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "수정할 계정 정보 (닉네임, 현재/새 앱 비밀번호)") @RequestBody
         requestDto: UserAccountUpdateRequestDto
     ): ResponseEntity<UserAccountUpdateResponseDto> {
-        if (userUid == null) {
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         val updatedUser = userService.updateUserAccount(userUid, requestDto)
         return ResponseEntity.ok(UserAccountUpdateResponseDto.fromUser(updatedUser))
     }
@@ -123,14 +109,10 @@ class UserController(
     @ApiResponse(responseCode = "401", description = "현재 앱 비밀번호 불일치 또는 인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun removeMyAppPassword(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?,
+        @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "앱 비밀번호 해제를 위한 현재 비밀번호") @RequestBody
         requestDto: AppPasswordRemoveRequestDto
     ): ResponseEntity<Void> {
-        if (userUid == null) {
-            logger.warn("App password removal attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         userService.removeAppPassword(userUid, requestDto.currentAppPassword)
         return ResponseEntity.noContent().build()
     }
@@ -144,12 +126,8 @@ class UserController(
     @ApiResponse(responseCode = "401", description = "인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun clearMyPartnerAndChatHistory(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?
+        @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<Void> {
-        if (userUid == null) {
-            logger.warn("Clear partner and chat history attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         userService.clearPartnerAndChatHistory(userUid)
         return ResponseEntity.noContent().build()
     }
@@ -163,12 +141,8 @@ class UserController(
     @ApiResponse(responseCode = "401", description = "인증 실패")
     @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun deleteMyAccount(
-        @Parameter(hidden = true) @AuthenticationPrincipal userUid: String?
+        @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<Void> {
-        if (userUid == null) {
-            logger.warn("Account deletion attempt: User UID from @AuthenticationPrincipal is null.")
-            throw CustomException(ErrorCode.TOKEN_NOT_FOUND)
-        }
         logger.info("User UID: {} attempting to delete their account.", userUid)
         userService.deleteUserAccount(userUid)
         return ResponseEntity.noContent().build()
