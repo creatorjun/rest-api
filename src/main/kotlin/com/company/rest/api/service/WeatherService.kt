@@ -1,6 +1,6 @@
 package com.company.rest.api.service
 
-import com.company.rest.api.config.AppleWeatherProperties // 임포트 추가
+import com.company.rest.api.config.AppleWeatherProperties
 import com.company.rest.api.config.LocationDetails
 import com.company.rest.api.dto.*
 import com.company.rest.api.entity.CurrentWeather
@@ -24,6 +24,7 @@ import java.security.PrivateKey
 import java.security.spec.PKCS8EncodedKeySpec
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.*
@@ -36,7 +37,7 @@ class WeatherService(
     private val dailyWeatherForecastRepository: DailyWeatherForecastRepository,
     private val locations: List<LocationDetails>,
     private val objectMapper: ObjectMapper,
-    private val appleWeatherProperties: AppleWeatherProperties // AppleWeatherProperties 주입
+    private val appleWeatherProperties: AppleWeatherProperties
 ) {
     private val logger = LoggerFactory.getLogger(WeatherService::class.java)
 
@@ -48,7 +49,6 @@ class WeatherService(
             return cachedJwt!!
         }
         logger.info("Generating new WeatherKit JWT...")
-        // 프로퍼티 사용
         val privateKeyInputStream = FileInputStream(appleWeatherProperties.keyPath)
         val privateKeyPem = privateKeyInputStream.readBytes().toString(StandardCharsets.UTF_8)
             .replace("-----BEGIN PRIVATE KEY-----", "")
@@ -61,7 +61,6 @@ class WeatherService(
         val now = Date()
         val expiry = Date(now.time + 3600 * 1000)
 
-        // 프로퍼티 사용
         val jwt = Jwts.builder()
             .header()
             .keyId(appleWeatherProperties.keyId)
@@ -78,7 +77,6 @@ class WeatherService(
         return jwt
     }
 
-    // ... (이하 fetchAndStore... 및 getWeatherForLocation 메소드는 동일)
     @Transactional
     fun fetchAndStoreCurrentWeather() {
         logger.info("Starting to fetch and store current weather for all locations.")
@@ -93,12 +91,10 @@ class WeatherService(
                     .block()
 
                 response?.currentWeather?.let { weatherDto ->
-                    // 1. 위도/경도로 기존 데이터를 조회합니다.
                     val existingWeather =
                         currentWeatherRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
 
                     if (existingWeather.isPresent) {
-                        // 2. 데이터가 있으면, 기존 엔티티의 값을 업데이트합니다.
                         val weatherToUpdate = existingWeather.get()
                         weatherToUpdate.measuredAt =
                             LocalDateTime.parse(weatherDto.asOf, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
@@ -108,10 +104,9 @@ class WeatherService(
                         weatherToUpdate.humidity = weatherDto.humidity
                         weatherToUpdate.windSpeed = weatherDto.wind?.speed ?: 0.0
                         weatherToUpdate.uvIndex = weatherDto.uvIndex
-                        currentWeatherRepository.save(weatherToUpdate) // save는 UPDATE 쿼리를 실행합니다.
+                        currentWeatherRepository.save(weatherToUpdate)
                         logger.info("Successfully updated current weather for ${location.cityName}")
                     } else {
-                        // 3. 데이터가 없으면, 새로운 엔티티를 생성합니다.
                         val newCurrentWeather = CurrentWeather(
                             latitude = location.latitude,
                             longitude = location.longitude,
@@ -123,7 +118,7 @@ class WeatherService(
                             windSpeed = weatherDto.wind?.speed ?: 0.0,
                             uvIndex = weatherDto.uvIndex
                         )
-                        currentWeatherRepository.save(newCurrentWeather) // save는 INSERT 쿼리를 실행합니다.
+                        currentWeatherRepository.save(newCurrentWeather)
                         logger.info("Successfully inserted current weather for ${location.cityName}")
                     }
                 }
@@ -147,12 +142,10 @@ class WeatherService(
                     .block()
 
                 response?.forecastNextHour?.let { forecastDto ->
-                    // 1. 위도/경도로 기존 데이터를 조회합니다.
                     val existingForecast =
                         hourlyForecastRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
 
                     if (existingForecast.isPresent) {
-                        // 2. 데이터가 있으면, 기존 엔티티의 값을 업데이트합니다.
                         val forecastToUpdate = existingForecast.get()
                         forecastToUpdate.summary = forecastDto.summary?.firstOrNull()?.condition
                         forecastToUpdate.minutesJson = objectMapper.writeValueAsString(forecastDto.minutes)
@@ -160,10 +153,9 @@ class WeatherService(
                             forecastDto.metadata.expireTime,
                             DateTimeFormatter.ISO_OFFSET_DATE_TIME
                         )
-                        hourlyForecastRepository.save(forecastToUpdate) // save는 UPDATE 쿼리를 실행합니다.
+                        hourlyForecastRepository.save(forecastToUpdate)
                         logger.info("Successfully updated hourly forecast for ${location.cityName}")
                     } else {
-                        // 3. 데이터가 없으면, 새로운 엔티티를 생성합니다.
                         val newHourlyForecast = HourlyForecast(
                             latitude = location.latitude,
                             longitude = location.longitude,
@@ -174,7 +166,7 @@ class WeatherService(
                                 DateTimeFormatter.ISO_OFFSET_DATE_TIME
                             )
                         )
-                        hourlyForecastRepository.save(newHourlyForecast) // save는 INSERT 쿼리를 실행합니다.
+                        hourlyForecastRepository.save(newHourlyForecast)
                         logger.info("Successfully inserted hourly forecast for ${location.cityName}")
                     }
                 }
@@ -200,9 +192,6 @@ class WeatherService(
 
                 response?.forecastDaily?.days?.let { dailyForecastsDto ->
                     if (dailyForecastsDto.isNotEmpty()) {
-                        // 여기서는 여러 날짜의 예보를 한 번에 다루므로,
-                        // 해당 지역의 모든 예보를 지우고 새로 넣는 방식이 더 간단하고 효율적입니다.
-                        // 이 메소드는 그대로 두어도 괜찮습니다. DeleteAll -> SaveAll 로직이 유효합니다.
                         dailyWeatherForecastRepository.deleteAllByLatitudeAndLongitude(
                             location.latitude,
                             location.longitude
@@ -245,10 +234,15 @@ class WeatherService(
         val dailyForecastEntities =
             dailyWeatherForecastRepository.findByLatitudeAndLongitudeOrderByForecastDateAsc(latitude, longitude)
 
+        val todayInKorea = LocalDate.now(ZoneId.of("Asia/Seoul"))
+        val futureDailyForecasts = dailyForecastEntities.filter { entity ->
+            !entity.forecastDate.isBefore(todayInKorea)
+        }
+
         val currentWeatherDto = currentWeatherEntity.map { CurrentWeatherResponseDto.fromEntity(it) }.orElse(null)
         val hourlyForecastDto =
             hourlyForecastEntity.map { HourlyForecastResponseDto.fromEntity(it, objectMapper) }.orElse(null)
-        val dailyForecastsDto = dailyForecastEntities.map { DailyWeatherForecastResponseDto.fromEntity(it) }
+        val dailyForecastsDto = futureDailyForecasts.map { DailyWeatherForecastResponseDto.fromEntity(it) }
 
         return WeatherResponseDto(
             currentWeather = currentWeatherDto,
