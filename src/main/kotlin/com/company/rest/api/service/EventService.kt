@@ -35,7 +35,8 @@ class EventService(
             text = requestDto.text,
             startTime = requestDto.getStartTimeAsLocalTime(),
             endTime = requestDto.getEndTimeAsLocalTime(),
-            eventDate = requestDto.getEventDateAsLocalDate()
+            eventDate = requestDto.getEventDateAsLocalDate(),
+            displayOrder = requestDto.displayOrder
         )
 
         val savedEvent = eventRepository.save(event)
@@ -67,17 +68,22 @@ class EventService(
                 throw CustomException(ErrorCode.EVENT_NOT_FOUND)
             }
 
-        // 이벤트 소유자 확인
         if (event.user.uid != userUid) {
             logger.warn("User UID: $userUid attempted to update event ID: ${requestDto.eventId} owned by another user UID: ${event.user.uid}")
             throw CustomException(ErrorCode.FORBIDDEN_EVENT_ACCESS)
         }
 
-        // 변경 요청된 필드만 업데이트
         var updated = false
         requestDto.text?.let {
             if (event.text != it) {
                 event.text = it
+                updated = true
+            }
+        }
+
+        requestDto.displayOrder?.let {
+            if (event.displayOrder != it) {
+                event.displayOrder = it
                 updated = true
             }
         }
@@ -126,7 +132,6 @@ class EventService(
                 throw CustomException(ErrorCode.EVENT_NOT_FOUND)
             }
 
-        // 이벤트 소유자 확인
         if (event.user.uid != userUid) {
             logger.warn("User UID: $userUid attempted to delete event ID: $eventId owned by another user UID: ${event.user.uid}")
             throw CustomException(ErrorCode.FORBIDDEN_EVENT_ACCESS)
