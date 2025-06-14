@@ -37,7 +37,8 @@ class WeatherService(
     private val dailyWeatherForecastRepository: DailyWeatherForecastRepository,
     private val locations: List<LocationDetails>,
     private val objectMapper: ObjectMapper,
-    private val appleWeatherProperties: AppleWeatherProperties
+    private val appleWeatherProperties: AppleWeatherProperties,
+    private val airQualityService: AirQualityService
 ) {
     private val logger = LoggerFactory.getLogger(WeatherService::class.java)
 
@@ -227,7 +228,7 @@ class WeatherService(
     }
 
     fun getWeatherForLocation(latitude: Double, longitude: Double): WeatherResponseDto {
-        logger.info("Fetching weather data from DB for lat: {}, lon: {}", latitude, longitude)
+        logger.info("Fetching combined weather and air quality data for lat: {}, lon: {}", latitude, longitude)
 
         val currentWeatherEntity = currentWeatherRepository.findByLatitudeAndLongitude(latitude, longitude)
         val hourlyForecastEntity = hourlyForecastRepository.findByLatitudeAndLongitude(latitude, longitude)
@@ -244,10 +245,16 @@ class WeatherService(
             hourlyForecastEntity.map { HourlyForecastResponseDto.fromEntity(it, objectMapper) }.orElse(null)
         val dailyForecastsDto = futureDailyForecasts.map { DailyWeatherForecastResponseDto.fromEntity(it) }
 
+        val location = locations.find { it.latitude == latitude && it.longitude == longitude }
+        val airQualityDto = location?.let {
+            airQualityService.getAirQualityInfo(it.cityName, todayInKorea)
+        }
+
         return WeatherResponseDto(
             currentWeather = currentWeatherDto,
             hourlyForecast = hourlyForecastDto,
-            dailyForecast = dailyForecastsDto
+            dailyForecast = dailyForecastsDto,
+            airQuality = airQualityDto
         )
     }
 }

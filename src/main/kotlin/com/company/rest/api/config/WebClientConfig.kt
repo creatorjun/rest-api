@@ -31,10 +31,19 @@ class WebClientConfig {
     }
 
     @Bean
-    @Qualifier("weatherKitWebClient") // WeatherKit 전용 WebClient 추가
+    @Qualifier("weatherKitWebClient")
     fun weatherKitWebClient(): WebClient {
         return WebClient.builder()
-            .baseUrl("https://weatherkit.apple.com") // Apple WeatherKit API 기본 URL
+            .baseUrl("https://weatherkit.apple.com")
+            .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+            .build()
+    }
+
+    @Bean
+    @Qualifier("airKoreaWebClient")
+    fun airKoreaWebClient(airQualityProperties: AirQualityProperties): WebClient {
+        return WebClient.builder()
+            .baseUrl(airQualityProperties.baseUrl)
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .build()
     }
