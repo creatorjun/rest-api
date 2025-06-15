@@ -47,4 +47,13 @@ class WebClientConfig {
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .build()
     }
+
+    @Bean
+    @Qualifier("holidayApiWebClient")
+    fun holidayApiWebClient(holidayApiProperties: HolidayApiProperties): WebClient {
+        return WebClient.builder()
+            .baseUrl(holidayApiProperties.baseUrl)
+            .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+            .build()
+    }
 }

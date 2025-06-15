@@ -10,8 +10,7 @@ import java.time.format.DateTimeFormatter
 data class WeatherResponseDto(
     val currentWeather: CurrentWeatherResponseDto?,
     val hourlyForecast: HourlyForecastResponseDto?,
-    val dailyForecast: List<DailyWeatherForecastResponseDto>?,
-    val airQuality: AirQualityInfoResponseDto?
+    val dailyForecast: List<DailyWeatherForecastResponseDto>?
 )
 
 data class CurrentWeatherResponseDto(
@@ -21,10 +20,12 @@ data class CurrentWeatherResponseDto(
     val conditionCode: String,
     val humidity: Double,
     val windSpeed: Double,
-    val uvIndex: Int
+    val uvIndex: Int,
+    val pm10Grade: String?,
+    val pm25Grade: String?
 ) {
     companion object {
-        fun fromEntity(entity: CurrentWeather): CurrentWeatherResponseDto {
+        fun fromEntity(entity: CurrentWeather, airQuality: AirQualityInfoResponseDto?): CurrentWeatherResponseDto {
             return CurrentWeatherResponseDto(
                 measuredAt = entity.measuredAt.format(DateTimeFormatter.ISO_DATE_TIME),
                 temperature = entity.temperature,
@@ -32,7 +33,9 @@ data class CurrentWeatherResponseDto(
                 conditionCode = entity.conditionCode,
                 humidity = entity.humidity,
                 windSpeed = entity.windSpeed,
-                uvIndex = entity.uvIndex
+                uvIndex = entity.uvIndex,
+                pm10Grade = airQuality?.pm10Grade,
+                pm25Grade = airQuality?.pm25Grade
             )
         }
     }

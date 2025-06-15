@@ -240,21 +240,23 @@ class WeatherService(
             !entity.forecastDate.isBefore(todayInKorea)
         }
 
-        val currentWeatherDto = currentWeatherEntity.map { CurrentWeatherResponseDto.fromEntity(it) }.orElse(null)
-        val hourlyForecastDto =
-            hourlyForecastEntity.map { HourlyForecastResponseDto.fromEntity(it, objectMapper) }.orElse(null)
-        val dailyForecastsDto = futureDailyForecasts.map { DailyWeatherForecastResponseDto.fromEntity(it) }
-
         val location = locations.find { it.latitude == latitude && it.longitude == longitude }
         val airQualityDto = location?.let {
             airQualityService.getAirQualityInfo(it.cityName, todayInKorea)
         }
 
+        val currentWeatherDto = currentWeatherEntity.map {
+            CurrentWeatherResponseDto.fromEntity(it, airQualityDto)
+        }.orElse(null)
+
+        val hourlyForecastDto =
+            hourlyForecastEntity.map { HourlyForecastResponseDto.fromEntity(it, objectMapper) }.orElse(null)
+        val dailyForecastsDto = futureDailyForecasts.map { DailyWeatherForecastResponseDto.fromEntity(it) }
+
         return WeatherResponseDto(
             currentWeather = currentWeatherDto,
             hourlyForecast = hourlyForecastDto,
-            dailyForecast = dailyForecastsDto,
-            airQuality = airQualityDto
+            dailyForecast = dailyForecastsDto
         )
     }
 }

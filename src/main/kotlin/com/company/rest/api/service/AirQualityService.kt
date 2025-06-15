@@ -51,9 +51,7 @@ class AirQualityService(
             for (regionName in allRegionNames) {
                 combinedForecasts[regionName] = AirQualityInfoResponseDto(
                     pm10Grade = pm10Grades[regionName],
-                    pm25Grade = pm25Grades[regionName],
-                    overallForecast = pm10Forecast?.informOverall ?: pm25Forecast?.informOverall,
-                    informCause = pm10Forecast?.informCause ?: pm25Forecast?.informCause
+                    pm25Grade = pm25Grades[regionName]
                 )
             }
 
@@ -86,12 +84,12 @@ class AirQualityService(
                 .bodyToMono(AirKoreaForecastResponseWrapper::class.java)
                 .block()
 
-            val responseBody = response?.response?.body
-            if (responseBody?.items.isNullOrEmpty()) {
+            val items = response?.response?.body?.items
+            if (items.isNullOrEmpty()) {
                 logger.warn("No items found in AirKorea response for date: {}, informCode: {}", date, informCode)
                 null
             } else {
-                responseBody.items.first()
+                items.first()
             }
         } catch (e: Exception) {
             logger.error("Error fetching AirKorea forecast for date: {}, informCode: {}. Error: {}", date, informCode, e.message)
