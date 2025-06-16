@@ -92,7 +92,12 @@ class AirQualityService(
                 items.first()
             }
         } catch (e: Exception) {
-            logger.error("Error fetching AirKorea forecast for date: {}, informCode: {}. Error: {}", date, informCode, e.message)
+            logger.error(
+                "Error fetching AirKorea forecast for date: {}, informCode: {}. Error: {}",
+                date,
+                informCode,
+                e.message
+            )
             null
         }
     }

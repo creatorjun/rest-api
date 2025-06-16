@@ -32,7 +32,11 @@ class HolidayController(
     fun getHolidays(
         @Parameter(description = "조회할 연도", required = true, example = "2025")
         @PathVariable year: Int,
-        @Parameter(description = "클라이언트가 가진 데이터의 ETag 값", `in` = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, name = "If-None-Match")
+        @Parameter(
+            description = "클라이언트가 가진 데이터의 ETag 값",
+            `in` = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER,
+            name = "If-None-Match"
+        )
         @RequestHeader(name = "If-None-Match", required = false) eTag: String?
     ): ResponseEntity<List<HolidayDto>> {
 

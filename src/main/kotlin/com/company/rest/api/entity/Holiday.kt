@@ -1,12 +1,8 @@
 package com.company.rest.api.entity
 
-import jakarta.persistence.Column
-import jakarta.persistence.Entity
-import jakarta.persistence.Id
-import jakarta.persistence.Index
-import jakarta.persistence.Table
+import jakarta.persistence.*
 import java.time.LocalDate
-import java.util.UUID
+import java.util.*
 
 @Entity
 @Table(

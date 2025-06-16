@@ -30,9 +30,14 @@ class SecurityConfig(
             .sessionManagement { session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { authorize ->
                 authorize
-                    .requestMatchers("/**").permitAll() //for test
-                    .requestMatchers("/ws/**").permitAll()
-                    .requestMatchers("/api/v1/auth/**").permitAll()
+                    .requestMatchers(
+                        "/api/v1/auth/**",
+                        "/ws/**",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**",
+                        "/api/v1/admin/ping",
+                        "/favicon.ico" // 이 부분을 추가합니다.
+                    ).permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
