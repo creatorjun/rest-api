@@ -31,9 +31,6 @@ class UserController(
         description = "현재 인증된 사용자의 FCM 토큰을 서버에 등록하거나 갱신합니다."
     )
     @ApiResponse(responseCode = "200", description = "FCM 토큰이 성공적으로 업데이트됨")
-    @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: FCM 토큰 누락)")
-    @ApiResponse(responseCode = "401", description = "인증 실패")
-    @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun updateMyFcmToken(
         @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "등록할 FCM 토큰 정보") @RequestBody
@@ -57,9 +54,6 @@ class UserController(
             schema = Schema(implementation = AppPasswordVerificationResponseDto::class)
         )]
     )
-    @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 비밀번호 누락, 혹은 비밀번호 미설정 상태)")
-    @ApiResponse(responseCode = "401", description = "비밀번호 불일치 또는 인증 실패")
-    @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun verifyMyAppPassword(
         @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody @RequestBody requestDto: AppPasswordVerificationRequestDto
@@ -87,9 +81,6 @@ class UserController(
             schema = Schema(implementation = UserAccountUpdateResponseDto::class)
         )]
     )
-    @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 유효성 검사 실패 - 비밀번호 4자 미만 등)")
-    @ApiResponse(responseCode = "401", description = "인증 실패 (예: 현재 앱 비밀번호 불일치)")
-    @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun updateMyAccount(
         @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "수정할 계정 정보 (닉네임, 현재/새 앱 비밀번호)") @RequestBody
@@ -105,9 +96,6 @@ class UserController(
         description = "현재 인증된 사용자의 앱 비밀번호를 해제(삭제)합니다. 해제를 위해 현재 설정된 앱 비밀번호를 제공해야 합니다."
     )
     @ApiResponse(responseCode = "204", description = "앱 비밀번호가 성공적으로 해제됨")
-    @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 현재 비밀번호 누락, 혹은 비밀번호 미설정 상태)")
-    @ApiResponse(responseCode = "401", description = "현재 앱 비밀번호 불일치 또는 인증 실패")
-    @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun removeMyAppPassword(
         @Parameter(hidden = true) @UserId userUid: String,
         @Valid @SwaggerRequestBody(description = "앱 비밀번호 해제를 위한 현재 비밀번호") @RequestBody
@@ -123,8 +111,6 @@ class UserController(
         description = "현재 인증된 사용자의 파트너 관계를 해제하고, 해당 파트너와의 모든 채팅 메시지 기록을 삭제합니다."
     )
     @ApiResponse(responseCode = "204", description = "파트너 관계 및 대화 내역이 성공적으로 삭제됨")
-    @ApiResponse(responseCode = "401", description = "인증 실패")
-    @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     fun clearMyPartnerAndChatHistory(
         @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<Void> {
@@ -132,18 +118,30 @@ class UserController(
         return ResponseEntity.noContent().build()
     }
 
+    @DeleteMapping("/me/withdrawal")
+    @Operation(
+        summary = "회원가입 철회",
+        description = "최초 소셜 로그인 시 개인정보 동의를 거부한 사용자의 계정을 즉시 삭제합니다. 최초 로그인 시 발급된 토큰으로 인증해야 합니다."
+    )
+    @ApiResponse(responseCode = "204", description = "계정이 성공적으로 삭제됨")
+    fun withdrawUserAccount(
+        @Parameter(hidden = true) @UserId userUid: String
+    ): ResponseEntity<Void> {
+        logger.info("User UID: {} attempting to withdraw their account post-signup.", userUid)
+        userService.deleteUserAccount(userUid)
+        return ResponseEntity.noContent().build()
+    }
+
     @DeleteMapping("/me")
     @Operation(
-        summary = "내 계정 전체 삭제 (회원 탈퇴)",
+        summary = "회원 탈퇴 (계정 영구 삭제)",
         description = "현재 인증된 사용자의 계정과 관련된 모든 정보(일정, 앱 비밀번호, 파트너 정보, 채팅 내역, 초대장, 토큰 등)를 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다."
     )
-    @ApiResponse(responseCode = "204", description = "계정이 성공적으로 삭제됨 (No Content)")
-    @ApiResponse(responseCode = "401", description = "인증 실패")
-    @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    @ApiResponse(responseCode = "204", description = "계정이 성공적으로 삭제됨")
     fun deleteMyAccount(
         @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<Void> {
-        logger.info("User UID: {} attempting to delete their account.", userUid)
+        logger.info("User UID: {} attempting to permanently delete their account.", userUid)
         userService.deleteUserAccount(userUid)
         return ResponseEntity.noContent().build()
     }

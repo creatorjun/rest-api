@@ -29,15 +29,19 @@ class HolidayService(
     fun syncHolidaysForYear(year: Int) {
         logger.info("Starting to sync holidays for year: {}", year)
 
-        // UriBuilderFactory를 사용하지 않고, URL 문자열을 직접 조합
-        val baseUrl = holidayApiProperties.baseUrl
-        val serviceKey = holidayApiProperties.serviceKey // 환경변수에서 읽어온, 이미 인코딩된 키
-        val fullUrl = "${baseUrl}/getRestDeInfo?solYear=$year&ServiceKey=$serviceKey&_type=json&numOfRows=100"
-
         try {
-            // 조합된 URL 문자열을 그대로 사용
             val response = webClient.get()
-                .uri(fullUrl)
+                .uri { uriBuilder ->
+                    val finalUri = uriBuilder.path("/getRestDeInfo")
+                        .queryParam("solYear", year)
+                        .queryParam("ServiceKey", holidayApiProperties.serviceKey)
+                        .queryParam("_type", "json")
+                        .queryParam("numOfRows", "100")
+                        .build()
+
+                    logger.debug("Holiday API Request URL: {}", finalUri.toString())
+                    finalUri
+                }
                 .retrieve()
                 .bodyToMono(HolidayApiResponseWrapper::class.java)
                 .block()
@@ -59,7 +63,7 @@ class HolidayService(
                 holidayRepository.saveAll(holidays)
                 logger.info("Successfully synced {} holidays for year: {}", holidays.size, year)
             } else {
-                logger.warn("No holidays found from API for year: {}. Response: {}", year, response)
+                logger.warn("No holidays found from API for year: {}", year)
             }
         } catch (e: Exception) {
             logger.error("Failed to sync holidays for year: {}", year, e)
