@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.util.DigestUtils
 import org.springframework.web.reactive.function.client.WebClient
+import org.springframework.web.reactive.function.client.WebClientResponseException
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -38,8 +39,8 @@ class HolidayService(
                         .queryParam("_type", "json")
                         .queryParam("numOfRows", "100")
                         .build()
-
-                    logger.debug("Holiday API Request URL: {}", finalUri.toString())
+                    // URL을 더 잘보이게 INFO 레벨로 로그를 남깁니다.
+                    logger.info("Holiday API Request URL: {}", finalUri.toString())
                     finalUri
                 }
                 .retrieve()
@@ -66,6 +67,14 @@ class HolidayService(
                 logger.warn("No holidays found from API for year: {}", year)
             }
         } catch (e: Exception) {
+            // WebClientResponseException일 경우, 응답 본문을 로그로 남겨서 정확한 원인을 확인합니다.
+            if (e is WebClientResponseException) {
+                logger.error(
+                    "WebClientResponseException Details - Status: {}, Body: {}",
+                    e.statusCode,
+                    e.responseBodyAsString
+                )
+            }
             logger.error("Failed to sync holidays for year: {}", year, e)
             throw e
         }

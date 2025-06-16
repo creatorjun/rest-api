@@ -64,7 +64,7 @@ class AdminController(
         description = "오늘 날짜의 대기질(미세먼지, 초미세먼지) 예보 정보를 에어코리아로부터 즉시 가져와 서버 캐시에 저장합니다."
     )
     @ApiResponse(responseCode = "200", description = "대기질 예보 정보 가져오기 작업이 성공적으로 실행됨")
-    @PostMapping("/air-quality")
+    @PostMapping("/air")
     fun triggerAirQualityFetch(): ResponseEntity<String> {
         val today = LocalDate.now(KOREA_ZONE_ID)
         logger.info("Manual trigger request received for fetching air quality data for date: {}", today)
