@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.util.DigestUtils
 import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.util.DefaultUriBuilderFactory
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -30,20 +29,15 @@ class HolidayService(
     fun syncHolidaysForYear(year: Int) {
         logger.info("Starting to sync holidays for year: {}", year)
 
-        val factory = DefaultUriBuilderFactory().apply {
-            encodingMode = DefaultUriBuilderFactory.EncodingMode.NONE
-        }
-
-        val uri = factory.builder().path("/getRestDeInfo")
-            .queryParam("solYear", year)
-            .queryParam("ServiceKey", holidayApiProperties.serviceKey)
-            .queryParam("_type", "json")
-            .queryParam("numOfRows", "100") // 1년치 데이터를 모두 가져오기 위해 충분한 수로 설정
-            .build()
+        // UriBuilderFactory를 사용하지 않고, URL 문자열을 직접 조합
+        val baseUrl = holidayApiProperties.baseUrl
+        val serviceKey = holidayApiProperties.serviceKey // 환경변수에서 읽어온, 이미 인코딩된 키
+        val fullUrl = "${baseUrl}/getRestDeInfo?solYear=$year&ServiceKey=$serviceKey&_type=json&numOfRows=100"
 
         try {
+            // 조합된 URL 문자열을 그대로 사용
             val response = webClient.get()
-                .uri(uri.toString())
+                .uri(fullUrl)
                 .retrieve()
                 .bodyToMono(HolidayApiResponseWrapper::class.java)
                 .block()
@@ -59,14 +53,13 @@ class HolidayService(
                         )
                     }
 
-                // 기존 연도 데이터 삭제 후 새로 삽입 (멱등성 보장)
                 val yearStart = LocalDate.of(year, 1, 1)
                 val yearEnd = LocalDate.of(year, 12, 31)
                 holidayRepository.deleteAllByDateBetween(yearStart, yearEnd)
                 holidayRepository.saveAll(holidays)
                 logger.info("Successfully synced {} holidays for year: {}", holidays.size, year)
             } else {
-                logger.warn("No holidays found from API for year: {}", year)
+                logger.warn("No holidays found from API for year: {}. Response: {}", year, response)
             }
         } catch (e: Exception) {
             logger.error("Failed to sync holidays for year: {}", year, e)

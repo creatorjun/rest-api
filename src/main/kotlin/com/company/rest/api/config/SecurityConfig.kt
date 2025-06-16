@@ -33,9 +33,7 @@ class SecurityConfig(
                     .requestMatchers(
                         "/api/v1/auth/**",
                         "/ws/**",
-                        "/swagger-ui/**",
-                        "/v3/api-docs/**",
-                        "/api/v1/admin/ping",
+                        "/api/v1/admin/**",
                         "/favicon.ico" // 이 부분을 추가합니다.
                     ).permitAll()
                     .anyRequest().authenticated()

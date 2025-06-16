@@ -7,5 +7,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class AirQualityProperties(
     @Value("\${kapi.service.key}")
     val serviceKey: String,
-    val baseUrl: String = "https://api.odcloud.kr/api/MinuDustFrcstDspthSvrc/v1"
+    val baseUrl: String = "http://apis.data.go.kr/B552584/ArpltnInforInqireSvc"
 )

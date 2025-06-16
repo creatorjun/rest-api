@@ -1,6 +1,7 @@
 package com.company.rest.api.controller
 
 import com.company.rest.api.service.GeminiService
+import com.company.rest.api.service.HolidayService
 import com.company.rest.api.service.WeatherService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -19,12 +20,12 @@ import java.time.ZoneId
 @Tag(name = "Admin", description = "서버 관리용 API (내부 테스트용)")
 class AdminController(
     private val weatherService: WeatherService,
-    private val geminiService: GeminiService
+    private val geminiService: GeminiService,
+    private val holidayService: HolidayService
 ) {
     private val logger = LoggerFactory.getLogger(AdminController::class.java)
-    private val KOREA_ZONE_ID = ZoneId.of("Asia/Seoul")
+    private val koreaZoneId = ZoneId.of("Asia/Seoul") // KOREA_ZONE_ID -> koreaZoneId
 
-    // --- 이 부분을 추가해주세요 ---
     @Operation(
         summary = "서버 상태 확인용 Ping (테스트용)",
         description = "서버가 정상적으로 요청을 받고 응답하는지 확인하는 간단한 엔드포인트입니다."
@@ -34,9 +35,7 @@ class AdminController(
         logger.info("Admin 'ping' endpoint was called successfully!")
         return ResponseEntity.ok("Pong!")
     }
-    // --------------------------
 
-    // --- Weather Admin Endpoints ---
     @Operation(
         summary = "모든 날씨 정보 수동으로 가져오기 (관리자용)",
         description = "서버에 설정된 모든 지역의 현재, 1시간, 일일 예보를 Apple WeatherKit으로부터 즉시 가져와 데이터베이스에 저장합니다."
@@ -60,7 +59,6 @@ class AdminController(
         }
     }
 
-    // --- Luck Admin Endpoint ---
     @Operation(
         summary = "오늘의 운세 정보 수동으로 가져오기 (관리자용)",
         description = "오늘 날짜의 운세 정보를 제미나이로부터 즉시 가져와 데이터베이스에 저장/업데이트합니다."
@@ -68,7 +66,7 @@ class AdminController(
     @ApiResponse(responseCode = "200", description = "운세 정보 가져오기 작업이 성공적으로 시작됨.")
     @PostMapping("/luck")
     fun manuallyTriggerFetchTodaysLuck(): ResponseEntity<String> {
-        val today = LocalDate.now(KOREA_ZONE_ID)
+        val today = LocalDate.now(koreaZoneId) // KOREA_ZONE_ID -> koreaZoneId
         logger.info("Manual trigger request received to fetch and store Lucks for today: {}", today)
         try {
             geminiService.fetchAndStoreDailyLuck(today)
@@ -77,6 +75,32 @@ class AdminController(
             return ResponseEntity.ok(message)
         } catch (e: Exception) {
             val errorMessage = "오늘 ($today) 운세 정보 가져오기 작업 시작 중 오류가 발생했습니다: ${e.message}"
+            logger.error(errorMessage, e)
+            return ResponseEntity.internalServerError().body(errorMessage)
+        }
+    }
+
+    @PostMapping("/holidays")
+    @Operation(
+        summary = "공휴일 정보 수동으로 동기화 (관리자용)",
+        description = "올해와 내년의 공휴일 정보를 공공데이터포털로부터 즉시 가져와 데이터베이스에 저장/업데이트합니다."
+    )
+    @ApiResponse(responseCode = "200", description = "공휴일 정보 동기화 작업이 성공적으로 실행됨.")
+    fun manuallyTriggerSyncHolidays(): ResponseEntity<String> {
+        val currentYear = LocalDate.now().year
+        logger.info(
+            "Manual trigger request received to sync holiday data for years {} and {}.",
+            currentYear,
+            currentYear + 1
+        )
+        try {
+            holidayService.syncHolidaysForYear(currentYear)
+            holidayService.syncHolidaysForYear(currentYear + 1)
+            val message = "공휴일 정보 동기화 작업(대상 연도: $currentYear, ${currentYear + 1})이 성공적으로 실행되었습니다."
+            logger.info(message)
+            return ResponseEntity.ok(message)
+        } catch (e: Exception) {
+            val errorMessage = "공휴일 정보 동기화 작업 중 오류가 발생했습니다: ${e.message}"
             logger.error(errorMessage, e)
             return ResponseEntity.internalServerError().body(errorMessage)
         }
