@@ -10,9 +10,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import java.net.URI
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
@@ -67,20 +64,18 @@ class AirQualityService(
 
     private fun fetchForecastFor(date: LocalDate, informCode: String): AirKoreaForecastItemDto? {
         return try {
-            val encodedServiceKey = URLEncoder.encode(airQualityProperties.serviceKey, StandardCharsets.UTF_8.toString())
-
-            val requestUrlString = "${airQualityProperties.baseUrl}/getMinuDustFrcstDspth" +
-                    "?serviceKey=$encodedServiceKey" +
-                    "&returnType=json" +
-                    "&numOfRows=100" +
-                    "&pageNo=1" +
-                    "&searchDate=${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}" +
-                    "&informCode=$informCode"
-
-            val requestUri = URI.create(requestUrlString)
-
             val response = webClient.get()
-                .uri(requestUri)
+                .uri { uriBuilder ->
+                    uriBuilder
+                        .path("/getMinuDustFrcstDspth")
+                        .queryParam("serviceKey", airQualityProperties.serviceKey)
+                        .queryParam("returnType", "json")
+                        .queryParam("numOfRows", 100)
+                        .queryParam("pageNo", 1)
+                        .queryParam("searchDate", date.format(DateTimeFormatter.ISO_LOCAL_DATE))
+                        .queryParam("informCode", informCode)
+                        .build()
+                }
                 .retrieve()
                 .bodyToMono(AirKoreaForecastResponseWrapper::class.java)
                 .block()

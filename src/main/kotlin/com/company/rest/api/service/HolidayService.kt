@@ -12,8 +12,6 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.util.DigestUtils
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import org.springframework.web.util.UriUtils
-import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -33,18 +31,16 @@ class HolidayService(
         logger.info("Starting to sync holidays for year: {}", year)
 
         try {
-            val encodedServiceKey = UriUtils.encode(holidayApiProperties.serviceKey, StandardCharsets.UTF_8)
-
-            val requestUrlString = "${holidayApiProperties.baseUrl}/getRestDeInfo" +
-                    "?ServiceKey=$encodedServiceKey" +
-                    "&solYear=$year" +
-                    "&_type=json" +
-                    "&numOfRows=100"
-
-            val requestUri = URI.create(requestUrlString)
-
             val response = webClient.get()
-                .uri(requestUri)
+                .uri { uriBuilder ->
+                    uriBuilder
+                        .path("/getRestDeInfo")
+                        .queryParam("ServiceKey", holidayApiProperties.serviceKey)
+                        .queryParam("solYear", year)
+                        .queryParam("_type", "json")
+                        .queryParam("numOfRows", 100)
+                        .build()
+                }
                 .retrieve()
                 .bodyToMono(HolidayApiResponseWrapper::class.java)
                 .block()
