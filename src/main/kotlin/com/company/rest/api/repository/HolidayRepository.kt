@@ -2,6 +2,9 @@ package com.company.rest.api.repository
 
 import com.company.rest.api.entity.Holiday
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.time.LocalDate
 
@@ -22,5 +25,7 @@ interface HolidayRepository : JpaRepository<Holiday, String> {
      * @param startDate 시작일
      * @param endDate 종료일
      */
-    fun deleteAllByDateBetween(startDate: LocalDate, endDate: LocalDate)
+    @Modifying
+    @Query("DELETE FROM Holiday h WHERE h.date BETWEEN :startDate AND :endDate")
+    fun deleteAllByDateBetween(@Param("startDate") startDate: LocalDate, @Param("endDate") endDate: LocalDate)
 }

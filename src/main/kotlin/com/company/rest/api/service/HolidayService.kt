@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.util.DigestUtils
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
+import org.springframework.web.util.UriUtils
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -31,16 +33,19 @@ class HolidayService(
         logger.info("Starting to sync holidays for year: {}", year)
 
         try {
+            // Holiday API는 서비스 키를 수동으로 인코딩하는 이전 방식으로 되돌립니다.
+            val encodedServiceKey = UriUtils.encode(holidayApiProperties.serviceKey, StandardCharsets.UTF_8)
+
+            val requestUrlString = "${holidayApiProperties.baseUrl}/getRestDeInfo" +
+                    "?ServiceKey=$encodedServiceKey" +
+                    "&solYear=$year" +
+                    "&_type=json" +
+                    "&numOfRows=100"
+
+            val requestUri = URI.create(requestUrlString)
+
             val response = webClient.get()
-                .uri { uriBuilder ->
-                    uriBuilder
-                        .path("/getRestDeInfo")
-                        .queryParam("ServiceKey", holidayApiProperties.serviceKey)
-                        .queryParam("solYear", year)
-                        .queryParam("_type", "json")
-                        .queryParam("numOfRows", 100)
-                        .build()
-                }
+                .uri(requestUri)
                 .retrieve()
                 .bodyToMono(HolidayApiResponseWrapper::class.java)
                 .block()

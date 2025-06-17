@@ -2,6 +2,7 @@ package com.company.rest.api.controller
 
 import com.company.rest.api.service.AirQualityService
 import com.company.rest.api.service.GeminiService
+import com.company.rest.api.service.HolidayService
 import com.company.rest.api.service.WeatherService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -21,7 +22,8 @@ import java.time.ZoneId
 class AdminController(
     private val weatherService: WeatherService,
     private val geminiService: GeminiService,
-    private val airQualityService: AirQualityService
+    private val airQualityService: AirQualityService,
+    private val holidayService: HolidayService // HolidayService 주입 추가
 ) {
     private val logger = LoggerFactory.getLogger(AdminController::class.java)
     private val KOREA_ZONE_ID = ZoneId.of("Asia/Seoul")
@@ -98,6 +100,28 @@ class AdminController(
             val errorMessage = "오늘 ($today) 운세 정보 가져오기 작업 시작 중 오류가 발생했습니다: ${e.message}"
             logger.error(errorMessage, e)
             return ResponseEntity.internalServerError().body(errorMessage)
+        }
+    }
+
+    @Operation(
+        summary = "공휴일 정보 수동으로 가져오기 (관리자용)",
+        description = "올해와 내년의 공휴일 정보를 공공데이터포털로부터 즉시 가져와 데이터베이스에 저장/업데이트합니다."
+    )
+    @ApiResponse(responseCode = "200", description = "공휴일 정보 가져오기 작업이 성공적으로 실행됨")
+    @PostMapping("/holidays")
+    fun triggerHolidaySync(): ResponseEntity<String> {
+        logger.info("Manual trigger request received for syncing holiday data.")
+        return try {
+            val currentYear = LocalDate.now(KOREA_ZONE_ID).year
+            holidayService.syncHolidaysForYear(currentYear)
+            holidayService.syncHolidaysForYear(currentYear + 1)
+            val message = "올해($currentYear)와 내년(${currentYear + 1}) 공휴일 정보 동기화 작업이 성공적으로 실행되었습니다."
+            logger.info(message)
+            ResponseEntity.ok(message)
+        } catch (e: Exception) {
+            val errorMessage = "공휴일 정보 수동 동기화 중 오류 발생: ${e.message}"
+            logger.error(errorMessage, e)
+            ResponseEntity.internalServerError().body(errorMessage)
         }
     }
 }
