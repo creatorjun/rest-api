@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.util.DefaultUriBuilderFactory
 
 @Configuration
 class WebClientConfig {
@@ -43,11 +42,7 @@ class WebClientConfig {
     @Bean
     @Qualifier("airKoreaWebClient")
     fun airKoreaWebClient(airQualityProperties: AirQualityProperties): WebClient {
-        val factory = DefaultUriBuilderFactory(airQualityProperties.baseUrl)
-        factory.encodingMode = DefaultUriBuilderFactory.EncodingMode.URI_COMPONENT
-
         return WebClient.builder()
-            .uriBuilderFactory(factory)
             .baseUrl(airQualityProperties.baseUrl)
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .build()
@@ -56,11 +51,7 @@ class WebClientConfig {
     @Bean
     @Qualifier("holidayApiWebClient")
     fun holidayApiWebClient(holidayApiProperties: HolidayApiProperties): WebClient {
-        val factory = DefaultUriBuilderFactory(holidayApiProperties.baseUrl)
-        factory.encodingMode = DefaultUriBuilderFactory.EncodingMode.URI_COMPONENT
-
         return WebClient.builder()
-            .uriBuilderFactory(factory)
             .baseUrl(holidayApiProperties.baseUrl)
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .build()

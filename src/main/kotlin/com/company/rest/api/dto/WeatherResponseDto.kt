@@ -25,7 +25,7 @@ data class CurrentWeatherResponseDto(
     val pm25Grade: String?
 ) {
     companion object {
-        fun fromEntity(entity: CurrentWeather): CurrentWeatherResponseDto {
+        fun fromEntity(entity: CurrentWeather, airQuality: AirQualityInfoResponseDto?): CurrentWeatherResponseDto {
             return CurrentWeatherResponseDto(
                 measuredAt = entity.measuredAt.format(DateTimeFormatter.ISO_DATE_TIME),
                 temperature = entity.temperature,
@@ -34,8 +34,9 @@ data class CurrentWeatherResponseDto(
                 humidity = entity.humidity,
                 windSpeed = entity.windSpeed,
                 uvIndex = entity.uvIndex,
-                pm10Grade = entity.pm10Grade,
-                pm25Grade = entity.pm25Grade
+                // 실시간으로 가져온 airQuality 정보를 우선 사용하고, 없으면 DB의 값을 사용 (둘 다 null일 수 있음)
+                pm10Grade = airQuality?.pm10Grade ?: entity.pm10Grade,
+                pm25Grade = airQuality?.pm25Grade ?: entity.pm25Grade
             )
         }
     }

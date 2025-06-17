@@ -7,9 +7,13 @@ import com.company.rest.api.dto.AirKoreaForecastResponseWrapper
 import com.company.rest.api.dto.AirQualityInfoResponseDto
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.reactive.function.client.WebClientResponseException
+import reactor.core.publisher.Mono
+import java.net.URI
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
@@ -24,6 +28,7 @@ class AirQualityService(
 
     private val forecastCache = ConcurrentHashMap<LocalDate, Map<String, AirQualityInfoResponseDto>>()
     private val regionNameMap = locations.associateBy { it.airkoreaRegionName }
+    private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
     fun getAirQualityInfo(cityName: String, date: LocalDate): AirQualityInfoResponseDto? {
         val airkoreaRegionName = locations.find { it.cityName == cityName }?.airkoreaRegionName
@@ -63,47 +68,65 @@ class AirQualityService(
     }
 
     private fun fetchForecastFor(date: LocalDate, informCode: String): AirKoreaForecastItemDto? {
-        return try {
-            val response = webClient.get()
-                .uri { uriBuilder ->
-                    uriBuilder
-                        .path("/getMinuDustFrcstDspth")
-                        .queryParam("serviceKey", airQualityProperties.serviceKey)
-                        .queryParam("returnType", "json")
-                        .queryParam("numOfRows", 100)
-                        .queryParam("pageNo", 1)
-                        .queryParam("searchDate", date.format(DateTimeFormatter.ISO_LOCAL_DATE))
-                        .queryParam("informCode", informCode)
-                        .build()
-                }
-                .retrieve()
-                .bodyToMono(AirKoreaForecastResponseWrapper::class.java)
-                .block()
+        try {
+            val encodedServiceKey = URLEncoder.encode(airQualityProperties.serviceKey, StandardCharsets.UTF_8.toString())
 
-            val items = response?.response?.body?.items
-            if (items.isNullOrEmpty()) {
-                logger.warn("No items found in AirKorea response for date: {}, informCode: {}", date, informCode)
-                null
-            } else {
-                items.first()
-            }
-        } catch (e: WebClientResponseException) {
-            logger.error(
-                "Error fetching AirKorea forecast for date: {}, informCode: {}. Status: {}, Body: {}",
-                date,
-                informCode,
-                e.statusCode,
-                e.responseBodyAsString
-            )
-            null
+            val requestUrlString = "${airQualityProperties.baseUrl}/getMinuDustFrcstDspth" +
+                    "?serviceKey=$encodedServiceKey" +
+                    "&returnType=json" +
+                    "&numOfRows=100" +
+                    "&pageNo=1" +
+                    "&searchDate=${date.format(dateFormatter)}" +
+                    "&informCode=$informCode"
+
+            return webClient.get()
+                .uri(URI.create(requestUrlString))
+                .exchangeToMono { response ->
+                    if (response.statusCode() == HttpStatus.OK) {
+                        response.bodyToMono(AirKoreaForecastResponseWrapper::class.java)
+                            .flatMap { wrapper ->
+                                val header = wrapper.response?.header
+                                if (header?.resultCode != "00") {
+                                    logger.warn(
+                                        "AirKorea API returned a non-success internal code: {}, message: {} for informCode: {}",
+                                        header?.resultCode, header?.resultMsg, informCode
+                                    )
+                                    return@flatMap Mono.empty<AirKoreaForecastItemDto>()
+                                }
+
+                                val items = wrapper.response.body?.items
+                                if (items.isNullOrEmpty()) {
+                                    logger.warn("No items found in AirKorea response for informCode: {}", informCode)
+                                    Mono.empty()
+                                } else {
+                                    val targetDateString = date.format(dateFormatter)
+                                    val latestForecastForItem = items
+                                        .filter { it.informData == targetDateString }
+                                        .maxByOrNull { it.dataTime ?: "" }
+
+                                    if (latestForecastForItem == null) {
+                                        logger.warn("No forecast item found for today ({})", targetDateString)
+                                        Mono.empty()
+                                    } else {
+                                        logger.info("Selected latest forecast for {}: {}", informCode, latestForecastForItem.dataTime)
+                                        Mono.just(latestForecastForItem)
+                                    }
+                                }
+                            }
+                    } else {
+                        response.bodyToMono(String::class.java).defaultIfEmpty("").flatMap { errorBody ->
+                            logger.error(
+                                "Error fetching AirKorea forecast for informCode: {}. Status: {}, Body: {}",
+                                informCode, response.statusCode(), errorBody
+                            )
+                            Mono.empty()
+                        }
+                    }
+                }
+                .block()
         } catch (e: Exception) {
-            logger.error(
-                "Error fetching AirKorea forecast for date: {}, informCode: {}. Error: {}",
-                date,
-                informCode,
-                e.message
-            )
-            null
+            logger.error("Exception in fetchForecastFor for informCode: {}. Error: {}", informCode, e.message, e)
+            return null
         }
     }
 

@@ -237,7 +237,7 @@ class WeatherService(
     }
 
     fun getWeatherForLocation(latitude: Double, longitude: Double): WeatherResponseDto {
-        logger.info("Fetching combined weather data for lat: {}, lon: {}", latitude, longitude)
+        logger.info("Fetching combined weather and air quality data for lat: {}, lon: {}", latitude, longitude)
 
         val currentWeatherEntity = currentWeatherRepository.findByLatitudeAndLongitude(latitude, longitude)
         val hourlyForecastEntity = hourlyForecastRepository.findByLatitudeAndLongitude(latitude, longitude)
@@ -249,8 +249,15 @@ class WeatherService(
             !entity.forecastDate.isBefore(todayInKorea)
         }
 
+        // 실시간 조회를 위해 캐시에서 최신 미세먼지 정보를 가져옵니다.
+        val location = locations.find { it.latitude == latitude && it.longitude == longitude }
+        val airQualityDto = location?.let {
+            airQualityService.getAirQualityInfo(it.cityName, todayInKorea)
+        }
+
         val currentWeatherDto = currentWeatherEntity.map {
-            CurrentWeatherResponseDto.fromEntity(it)
+            // DTO 변환 시, DB의 날씨 정보와 캐시의 미세먼지 정보를 함께 넘겨줍니다.
+            CurrentWeatherResponseDto.fromEntity(it, airQualityDto)
         }.orElse(null)
 
         val hourlyForecastDto =

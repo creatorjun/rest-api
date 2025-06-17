@@ -14,7 +14,7 @@ data class AirKoreaResponseBody(
     @JsonProperty("header")
     val header: AirKoreaResponseHeader?,
     @JsonProperty("body")
-    val body: AirKoreaResponseItems?
+    val body: AirKoreaApiBody?
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -26,11 +26,15 @@ data class AirKoreaResponseHeader(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AirKoreaResponseItems(
+data class AirKoreaApiBody(
     @JsonProperty("totalCount")
     val totalCount: Int?,
     @JsonProperty("items")
-    val items: List<AirKoreaForecastItemDto>?
+    val items: List<AirKoreaForecastItemDto>?,
+    @JsonProperty("pageNo")
+    val pageNo: Int?,
+    @JsonProperty("numOfRows")
+    val numOfRows: Int?
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
