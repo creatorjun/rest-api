@@ -36,7 +36,6 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
-    implementation("io.netty:netty-resolver-dns-native-macos:4.1.119.Final:osx-x86_64")
 
     // Kotlin 기본 라이브러리
     implementation 'org.jetbrains.kotlin:kotlin-reflect'

@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.util.DigestUtils
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
+import org.springframework.web.util.UriUtils
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -31,18 +33,18 @@ class HolidayService(
         logger.info("Starting to sync holidays for year: {}", year)
 
         try {
+            val encodedServiceKey = UriUtils.encode(holidayApiProperties.serviceKey, StandardCharsets.UTF_8)
+
+            val requestUrlString = "${holidayApiProperties.baseUrl}/getRestDeInfo" +
+                    "?ServiceKey=$encodedServiceKey" +
+                    "&solYear=$year" +
+                    "&_type=json" +
+                    "&numOfRows=100"
+
+            val requestUri = URI.create(requestUrlString)
+
             val response = webClient.get()
-                .uri { uriBuilder ->
-                    val finalUri = uriBuilder.path("/getRestDeInfo")
-                        .queryParam("solYear", year)
-                        .queryParam("ServiceKey", holidayApiProperties.serviceKey)
-                        .queryParam("_type", "json")
-                        .queryParam("numOfRows", "100")
-                        .build()
-                    // URL을 더 잘보이게 INFO 레벨로 로그를 남깁니다.
-                    logger.info("Holiday API Request URL: {}", finalUri.toString())
-                    finalUri
-                }
+                .uri(requestUri)
                 .retrieve()
                 .bodyToMono(HolidayApiResponseWrapper::class.java)
                 .block()
@@ -51,10 +53,11 @@ class HolidayService(
 
             if (holidayItems.isNotEmpty()) {
                 val holidays = holidayItems.filter { it.isHoliday == "Y" }
-                    .map {
+                    .groupBy { LocalDate.parse(it.locdate.toString(), dateParser) }
+                    .map { (date, itemsOnDate) ->
                         Holiday(
-                            date = LocalDate.parse(it.locdate.toString(), dateParser),
-                            name = it.dateName
+                            date = date,
+                            name = itemsOnDate.joinToString(" / ") { it.dateName }
                         )
                     }
 
@@ -67,7 +70,6 @@ class HolidayService(
                 logger.warn("No holidays found from API for year: {}", year)
             }
         } catch (e: Exception) {
-            // WebClientResponseException일 경우, 응답 본문을 로그로 남겨서 정확한 원인을 확인합니다.
             if (e is WebClientResponseException) {
                 logger.error(
                     "WebClientResponseException Details - Status: {}, Body: {}",
