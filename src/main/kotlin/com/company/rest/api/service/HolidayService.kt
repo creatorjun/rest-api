@@ -52,7 +52,11 @@ class HolidayService(
             val holidayItems = response?.response?.body?.items?.item ?: emptyList()
 
             if (holidayItems.isNotEmpty()) {
-                val holidays = holidayItems.filter { it.isHoliday == "Y" }
+                val holidaysInYear = holidayItems.filter {
+                    it.locdate.toString().startsWith(year.toString())
+                }
+
+                val holidays = holidaysInYear.filter { it.isHoliday == "Y" }
                     .groupBy { LocalDate.parse(it.locdate.toString(), dateParser) }
                     .map { (date, itemsOnDate) ->
                         Holiday(
