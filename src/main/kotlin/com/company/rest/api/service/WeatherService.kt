@@ -44,6 +44,7 @@ class WeatherService(
 
     private var cachedJwt: String? = null
     private var jwtExpiryTime: LocalDateTime? = null
+    private val KOREA_ZONE_ID = ZoneId.of("Asia/Seoul")
 
     private fun generateWeatherKitJwt(): String {
         if (cachedJwt != null && jwtExpiryTime != null && LocalDateTime.now().isBefore(jwtExpiryTime)) {
@@ -82,16 +83,20 @@ class WeatherService(
     fun fetchAndStoreCurrentWeather() {
         logger.info("Starting to fetch and store current weather for all locations.")
         val jwt = generateWeatherKitJwt()
+        val todayInKorea = LocalDate.now(KOREA_ZONE_ID)
+
         locations.forEach { location ->
             try {
-                val response = webClient.get()
+                val weatherResponse = webClient.get()
                     .uri("/api/v1/weather/ko/${location.latitude}/${location.longitude}?dataSets=currentWeather")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $jwt")
                     .retrieve()
                     .bodyToMono(WeatherKitResponse::class.java)
                     .block()
 
-                response?.currentWeather?.let { weatherDto ->
+                weatherResponse?.currentWeather?.let { weatherDto ->
+                    val airQualityInfo = airQualityService.getAirQualityInfo(location.cityName, todayInKorea)
+
                     val existingWeather =
                         currentWeatherRepository.findByLatitudeAndLongitude(location.latitude, location.longitude)
 
@@ -105,6 +110,8 @@ class WeatherService(
                         weatherToUpdate.humidity = weatherDto.humidity
                         weatherToUpdate.windSpeed = weatherDto.wind?.speed ?: 0.0
                         weatherToUpdate.uvIndex = weatherDto.uvIndex
+                        weatherToUpdate.pm10Grade = airQualityInfo?.pm10Grade
+                        weatherToUpdate.pm25Grade = airQualityInfo?.pm25Grade
                         currentWeatherRepository.save(weatherToUpdate)
                         logger.info("Successfully updated current weather for ${location.cityName}")
                     } else {
@@ -117,7 +124,9 @@ class WeatherService(
                             conditionCode = weatherDto.conditionCode,
                             humidity = weatherDto.humidity,
                             windSpeed = weatherDto.wind?.speed ?: 0.0,
-                            uvIndex = weatherDto.uvIndex
+                            uvIndex = weatherDto.uvIndex,
+                            pm10Grade = airQualityInfo?.pm10Grade,
+                            pm25Grade = airQualityInfo?.pm25Grade
                         )
                         currentWeatherRepository.save(newCurrentWeather)
                         logger.info("Successfully inserted current weather for ${location.cityName}")
@@ -228,25 +237,20 @@ class WeatherService(
     }
 
     fun getWeatherForLocation(latitude: Double, longitude: Double): WeatherResponseDto {
-        logger.info("Fetching combined weather and air quality data for lat: {}, lon: {}", latitude, longitude)
+        logger.info("Fetching combined weather data for lat: {}, lon: {}", latitude, longitude)
 
         val currentWeatherEntity = currentWeatherRepository.findByLatitudeAndLongitude(latitude, longitude)
         val hourlyForecastEntity = hourlyForecastRepository.findByLatitudeAndLongitude(latitude, longitude)
         val dailyForecastEntities =
             dailyWeatherForecastRepository.findByLatitudeAndLongitudeOrderByForecastDateAsc(latitude, longitude)
 
-        val todayInKorea = LocalDate.now(ZoneId.of("Asia/Seoul"))
+        val todayInKorea = LocalDate.now(KOREA_ZONE_ID)
         val futureDailyForecasts = dailyForecastEntities.filter { entity ->
             !entity.forecastDate.isBefore(todayInKorea)
         }
 
-        val location = locations.find { it.latitude == latitude && it.longitude == longitude }
-        val airQualityDto = location?.let {
-            airQualityService.getAirQualityInfo(it.cityName, todayInKorea)
-        }
-
         val currentWeatherDto = currentWeatherEntity.map {
-            CurrentWeatherResponseDto.fromEntity(it, airQualityDto)
+            CurrentWeatherResponseDto.fromEntity(it)
         }.orElse(null)
 
         val hourlyForecastDto =

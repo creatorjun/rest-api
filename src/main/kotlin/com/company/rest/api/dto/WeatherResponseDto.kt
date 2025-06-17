@@ -25,7 +25,7 @@ data class CurrentWeatherResponseDto(
     val pm25Grade: String?
 ) {
     companion object {
-        fun fromEntity(entity: CurrentWeather, airQuality: AirQualityInfoResponseDto?): CurrentWeatherResponseDto {
+        fun fromEntity(entity: CurrentWeather): CurrentWeatherResponseDto {
             return CurrentWeatherResponseDto(
                 measuredAt = entity.measuredAt.format(DateTimeFormatter.ISO_DATE_TIME),
                 temperature = entity.temperature,
@@ -34,8 +34,8 @@ data class CurrentWeatherResponseDto(
                 humidity = entity.humidity,
                 windSpeed = entity.windSpeed,
                 uvIndex = entity.uvIndex,
-                pm10Grade = airQuality?.pm10Grade,
-                pm25Grade = airQuality?.pm25Grade
+                pm10Grade = entity.pm10Grade,
+                pm25Grade = entity.pm25Grade
             )
         }
     }
