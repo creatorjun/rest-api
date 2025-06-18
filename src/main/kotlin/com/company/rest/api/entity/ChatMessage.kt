@@ -1,5 +1,6 @@
 package com.company.rest.api.entity
 
+import com.company.rest.api.dto.MessageType
 import jakarta.persistence.*
 import java.time.LocalDateTime
 import java.util.*
@@ -10,6 +11,10 @@ data class ChatMessage(
     @Id
     @Column(name = "message_id", unique = true, nullable = false, updatable = false)
     val id: String = UUID.randomUUID().toString(),
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type", nullable = false)
+    var type: MessageType = MessageType.CHAT,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
@@ -41,10 +46,9 @@ data class ChatMessage(
     @Column(name = "read_at", nullable = true)
     var readAt: LocalDateTime? = null,
 
-    // 논리적 삭제를 위한 필드
     @Column(name = "is_deleted", nullable = false)
-    var isDeleted: Boolean = false, // 삭제 여부, 기본값 false
+    var isDeleted: Boolean = false,
 
     @Column(name = "deleted_at", nullable = true)
-    var deletedAt: LocalDateTime? = null // 삭제된 시간
+    var deletedAt: LocalDateTime? = null
 )

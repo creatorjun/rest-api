@@ -5,6 +5,7 @@ import com.company.rest.api.entity.ChatMessage
 import com.company.rest.api.exception.CustomException
 import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.repository.ChatMessageRepository
+import com.company.rest.api.repository.EventRepository
 import com.company.rest.api.repository.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
@@ -18,15 +19,17 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.stream.Collectors
 
 @Service
 class ChatService(
     private val userRepository: UserRepository,
     private val chatMessageRepository: ChatMessageRepository,
+    private val eventRepository: EventRepository,
     private val messagingTemplate: SimpMessagingTemplate,
     private val webSocketPresenceService: WebSocketPresenceService,
     private val fcmService: FcmService,
-    private val webSocketActivityService: WebSocketActivityService // 의존성 주입
+    private val webSocketActivityService: WebSocketActivityService
 ) {
     private val logger = LoggerFactory.getLogger(ChatService::class.java)
 
@@ -75,8 +78,21 @@ class ChatService(
             )
         }
 
+        val scheduleEventIds = messagesSlice.content.stream()
+            .filter { it.type == MessageType.SCHEDULE && it.content.isNotBlank() }
+            .map { it.content }
+            .collect(Collectors.toSet())
+
+        val eventDetailsMap = if (scheduleEventIds.isNotEmpty()) {
+            eventRepository.findAllById(scheduleEventIds).associate { event ->
+                event.id to EventResponseDto.fromEntity(event)
+            }
+        } else {
+            emptyMap()
+        }
+
         logger.info("Found {} messages. Has next page: {}", messagesSlice.numberOfElements, messagesSlice.hasNext())
-        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice)
+        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice, eventDetailsMap)
     }
 
     @Transactional(readOnly = true)
@@ -108,11 +124,24 @@ class ChatService(
             pageable
         )
 
+        val scheduleEventIds = messagesSlice.content.stream()
+            .filter { it.type == MessageType.SCHEDULE && it.content.isNotBlank() }
+            .map { it.content }
+            .collect(Collectors.toSet())
+
+        val eventDetailsMap = if (scheduleEventIds.isNotEmpty()) {
+            eventRepository.findAllById(scheduleEventIds).associate { event ->
+                event.id to EventResponseDto.fromEntity(event)
+            }
+        } else {
+            emptyMap()
+        }
+
         logger.info(
             "Search found {} messages for keyword '{}' between {} and {}. Has next page: {}",
             messagesSlice.numberOfElements, keyword, currentUserUid, otherUserUid, messagesSlice.hasNext()
         )
-        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice)
+        return PaginatedChatMessagesResponseDto.fromSlice(messagesSlice, eventDetailsMap)
     }
 
 
@@ -144,38 +173,48 @@ class ChatService(
         val sender = senderOptional.get()
         val receiver = receiverOptional.get()
 
-        // --- 바로 이 부분입니다! ---
-        // 1. 수신자가 현재 발신자와의 대화창을 보고 있는지 확인
         val isReceiverActive = webSocketActivityService.isUserActiveInChat(
             userUid = receiver.uid,
             partnerUid = sender.uid
         )
 
-        // 2. 활동 상태에 따라 isRead 값을 설정하여 엔티티 생성
         val chatMessageEntity = ChatMessage(
+            type = chatMessageDto.type,
             sender = sender,
             receiver = receiver,
             content = chatMessageDto.content ?: "",
-            isRead = isReceiverActive, // 수신자가 활성 상태이면 true, 아니면 false
+            isRead = isReceiverActive,
             readAt = if (isReceiverActive) LocalDateTime.now() else null
         )
         val savedMessageEntity = chatMessageRepository.save(chatMessageEntity)
         logger.info(
-            "processNewMessage: Message ID {} saved. From: {}, To: {}. isRead set to: {}",
-            savedMessageEntity.id, sender.uid, receiver.uid, savedMessageEntity.isRead
+            "processNewMessage: Message ID {} of type {} saved. From: {}, To: {}. isRead set to: {}",
+            savedMessageEntity.id, savedMessageEntity.type, sender.uid, receiver.uid, savedMessageEntity.isRead
         )
 
 
         val messageToSendDto = ChatMessageDto(
             id = savedMessageEntity.id,
-            type = chatMessageDto.type,
+            type = savedMessageEntity.type,
             content = savedMessageEntity.content,
             senderUid = sender.uid,
             senderNickname = sender.nickname,
             receiverUid = receiver.uid,
             timestamp = savedMessageEntity.createdAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-            isRead = savedMessageEntity.isRead // DB에 저장된 최종 isRead 상태 반영
+            isRead = savedMessageEntity.isRead,
+            eventDetails = null
         )
+
+        if (messageToSendDto.type == MessageType.SCHEDULE && savedMessageEntity.content.isNotBlank()) {
+            eventRepository.findById(savedMessageEntity.content).ifPresent { event ->
+                if (event.user.uid == sender.uid) {
+                    messageToSendDto.eventDetails = EventResponseDto.fromEntity(event)
+                    logger.info("Attached event details (ID: {}) to SCHEDULE message (ID: {})", event.id, savedMessageEntity.id)
+                } else {
+                    logger.warn("User {} tried to share an event {} they do not own. Forbidden.", sender.uid, event.id)
+                }
+            }
+        }
 
         if (webSocketPresenceService.isUserOnline(receiver.uid)) {
             messagingTemplate.convertAndSendToUser(
@@ -280,9 +319,9 @@ class ChatService(
         logger.info("User {} is marking all messages from partner {} as read.", readerUid, partnerUid)
 
         val readerUser = userRepository.findById(readerUid)
-            .orElseThrow { CustomException(ErrorCode.USER_NOT_FOUND) }
+            .orElseThrow { throw CustomException(ErrorCode.USER_NOT_FOUND) }
         val partnerUser = userRepository.findById(partnerUid)
-            .orElseThrow { CustomException(ErrorCode.USER_NOT_FOUND) }
+            .orElseThrow { throw CustomException(ErrorCode.USER_NOT_FOUND) }
 
         val unreadMessages = chatMessageRepository.findByReceiverAndSenderAndIsReadFalse(readerUser, partnerUser)
 
@@ -348,7 +387,8 @@ class ChatService(
             senderNickname = senderNickname,
             receiverUid = null,
             timestamp = System.currentTimeMillis(),
-            isRead = true
+            isRead = true,
+            eventDetails = null
         )
         messagingTemplate.convertAndSend("/topic/public", joinMessage)
         logger.info("handleUserJoin: Sent JOIN message to /topic/public for user: {}", senderNickname)
