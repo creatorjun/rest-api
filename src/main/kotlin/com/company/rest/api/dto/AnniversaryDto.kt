@@ -3,7 +3,6 @@ package com.company.rest.api.dto
 import com.company.rest.api.entity.Anniversary
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 data class AnniversaryCreateRequestDto(
