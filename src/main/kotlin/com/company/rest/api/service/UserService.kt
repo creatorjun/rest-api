@@ -4,6 +4,7 @@ import com.company.rest.api.dto.UserAccountUpdateRequestDto
 import com.company.rest.api.entity.User
 import com.company.rest.api.exception.CustomException
 import com.company.rest.api.exception.ErrorCode
+import com.company.rest.api.repository.AnniversaryRepository
 import com.company.rest.api.repository.ChatMessageRepository
 import com.company.rest.api.repository.EventRepository
 import com.company.rest.api.repository.PartnerInvitationRepository
@@ -19,7 +20,8 @@ class UserService(
     private val passwordEncoder: PasswordEncoder,
     private val chatMessageRepository: ChatMessageRepository,
     private val eventRepository: EventRepository,
-    private val partnerInvitationRepository: PartnerInvitationRepository
+    private val partnerInvitationRepository: PartnerInvitationRepository,
+    private val anniversaryRepository: AnniversaryRepository
 ) {
     private val logger = LoggerFactory.getLogger(UserService::class.java)
 
@@ -32,7 +34,6 @@ class UserService(
                 throw CustomException(ErrorCode.USER_NOT_FOUND)
             }
 
-        // appPasswordIsSet 플래그를 사용하여 비밀번호 설정 여부 확인
         if (!user.appPasswordIsSet || user.appPassword == null) {
             logger.warn(
                 "User UID: {} has not set an app password (appPasswordIsSet: {}).",
@@ -47,10 +48,9 @@ class UserService(
             logger.info("App password verification successful for user UID: {}", userUid)
         } else {
             logger.warn("App password verification failed for user UID: {}", userUid)
-            // 비밀번호 불일치 시 false 반환 대신 명시적 예외 발생
             throw CustomException(ErrorCode.APP_PASSWORD_INVALID)
         }
-        return true // 성공 시에만 true 반환
+        return true
     }
 
     @Transactional
@@ -75,7 +75,6 @@ class UserService(
         if (requestDto.newAppPassword != null) {
             val newPassword = requestDto.newAppPassword
             if (newPassword.isNotBlank()) {
-                // 기존 비밀번호가 설정되어 있는 경우 (비밀번호 변경)
                 if (user.appPasswordIsSet) {
                     if (requestDto.currentAppPassword == null || requestDto.currentAppPassword.isBlank()) {
                         logger.warn(
@@ -95,7 +94,7 @@ class UserService(
                         )
                         throw CustomException(ErrorCode.APP_PASSWORD_INVALID)
                     }
-                } else { // 기존 비밀번호가 없는 경우 (최초 설정)
+                } else {
                     if (requestDto.currentAppPassword != null && requestDto.currentAppPassword.isNotBlank()) {
                         logger.info(
                             "User UID: {} is setting app password for the first time (appPasswordIsSet: false). CurrentAppPassword field was provided but will be ignored.",
@@ -186,12 +185,11 @@ class UserService(
             userRepository.save(partnerUser)
             logger.info("Partner information cleared for former partner UID: {}", partnerUid)
 
-            val deletedMessagesCount = chatMessageRepository.deleteAllMessagesBetweenUsers(currentUser, partnerUser)
+            chatMessageRepository.deleteAllMessagesBetweenUsers(currentUser, partnerUser)
             logger.info(
-                "Chat history between user UID: {} and former partner UID: {} has been deleted. Count: {}",
+                "Chat history between user UID: {} and former partner UID: {} has been deleted.",
                 currentUserUid,
-                partnerUid,
-                deletedMessagesCount
+                partnerUid
             )
         } else {
             logger.warn(
@@ -263,6 +261,9 @@ class UserService(
         if (user.partnerUserUid != null) {
             clearPartnerAndChatHistory(user.uid)
         }
+
+        val deletedAnniversariesCount = anniversaryRepository.deleteAllByUser(user)
+        logger.info("Deleted {} anniversaries for user UID: {}", deletedAnniversariesCount, user.uid)
 
         val deletedInvitationsCount = partnerInvitationRepository.deleteAllByIssuerUser(user)
         logger.info("Deleted {} partner invitations issued by user UID: {}", deletedInvitationsCount, user.uid)
