@@ -41,6 +41,10 @@ enum class ErrorCode(
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."),
     FORBIDDEN_EVENT_ACCESS(HttpStatus.FORBIDDEN, "해당 이벤트에 접근할 권한이 없습니다."),
 
+    // Anniversary
+    ANNIVERSARY_NOT_FOUND(HttpStatus.NOT_FOUND, "기념일을 찾을 수 없습니다."),
+    FORBIDDEN_ANNIVERSARY_ACCESS(HttpStatus.FORBIDDEN, "해당 기념일에 접근할 권한이 없습니다."),
+
     // Chat
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."),
     FORBIDDEN_MESSAGE_ACCESS(HttpStatus.FORBIDDEN, "해당 메시지를 삭제할 권한이 없습니다."),
