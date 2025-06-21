@@ -1,8 +1,6 @@
 package com.company.rest.api.service
 
-import com.company.rest.api.dto.AuthResponseDto
-import com.company.rest.api.dto.LoginProvider
-import com.company.rest.api.dto.SocialLoginRequestDto
+import com.company.rest.api.dto.*
 import com.company.rest.api.dto.social.KakaoUserResponse
 import com.company.rest.api.dto.social.NaverUserResponse
 import com.company.rest.api.entity.User
@@ -14,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
+import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.reactive.function.client.WebClient
@@ -30,6 +29,9 @@ class SocialLoginService(
     @Qualifier("kakaoWebClient") private val kakaoWebClient: WebClient,
     private val userRepository: UserRepository,
     private val jwtTokenProvider: JwtTokenProvider,
+    private val messagingTemplate: SimpMessagingTemplate,
+    private val webSocketPresenceService: WebSocketPresenceService,
+    private val fcmService: FcmService,
     @Value("\${jwt.refresh-expiration-ms}") private val jwtRefreshExpirationMs: Long
 ) {
     private val logger = LoggerFactory.getLogger(SocialLoginService::class.java)
@@ -84,6 +86,10 @@ class SocialLoginService(
                         providerId = hashedOriginalId
                     )
                     userRepository.save(newUser)
+                }
+
+                if (!isNewUser) {
+                    sendForcedLogoutNotification(userEntity)
                 }
 
                 if (!isNewUser && request.nickname != null && request.nickname != userEntity.nickname) {
@@ -157,6 +163,30 @@ class SocialLoginService(
                     )
                 }
             }
+    }
+
+    private fun sendForcedLogoutNotification(user: User) {
+        val message = "다른 기기에서 로그인하여 로그아웃됩니다."
+
+        if (webSocketPresenceService.isUserOnline(user.uid)) {
+            val notificationDto = SystemNotificationDto(
+                type = SystemNotificationType.FORCED_LOGOUT,
+                message = message
+            )
+            messagingTemplate.convertAndSendToUser(user.uid, "/queue/private", notificationDto)
+            logger.info("Sent FORCED_LOGOUT notification to user {} via WebSocket.", user.uid)
+        } else {
+            user.fcmToken?.let { token ->
+                if (token.isNotBlank()) {
+                    val data = mapOf(
+                        "type" to SystemNotificationType.FORCED_LOGOUT.name,
+                        "message" to message
+                    )
+                    fcmService.sendNotification(token, null, null, data)
+                    logger.info("Sent FORCED_LOGOUT notification to user {} via FCM.", user.uid)
+                }
+            }
+        }
     }
 
     private fun verifySocialToken(request: SocialLoginRequestDto): Mono<VerifiedSocialUser> {

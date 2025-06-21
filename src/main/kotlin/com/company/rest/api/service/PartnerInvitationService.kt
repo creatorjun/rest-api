@@ -3,11 +3,13 @@ package com.company.rest.api.service
 import com.company.rest.api.dto.PartnerInvitationResponseDto
 import com.company.rest.api.dto.PartnerRelationResponseDto
 import com.company.rest.api.entity.PartnerInvitation
+import com.company.rest.api.event.PartnerRelationEstablishedEvent
 import com.company.rest.api.exception.CustomException
 import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.repository.PartnerInvitationRepository
 import com.company.rest.api.repository.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -16,7 +18,8 @@ import java.util.*
 @Service
 class PartnerInvitationService(
     private val partnerInvitationRepository: PartnerInvitationRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val logger = LoggerFactory.getLogger(PartnerInvitationService::class.java)
 
@@ -32,7 +35,6 @@ class PartnerInvitationService(
                 throw CustomException(ErrorCode.USER_NOT_FOUND)
             }
 
-        // 1. 사용자가 이미 파트너가 있는지 확인
         if (issuerUser.partnerUserUid != null) {
             logger.info(
                 "User UID: {} already has a partner (partner UID: {}). Cannot create new invitation.",
@@ -82,14 +84,12 @@ class PartnerInvitationService(
         logger.info("User UID: {} attempting to accept invitation ID: {}", accepterUserUid, invitationId)
         val now = LocalDateTime.now()
 
-        // 1. 초대를 수락하려는 사용자(accepterUser) 조회
         val accepterUser = userRepository.findById(accepterUserUid)
             .orElseThrow {
                 logger.warn("Accepter user not found with UID: {} for invitation ID: {}", accepterUserUid, invitationId)
                 throw CustomException(ErrorCode.USER_NOT_FOUND)
             }
 
-        // 2. 수락하려는 사용자가 이미 파트너가 있는지 확인
         if (accepterUser.partnerUserUid != null) {
             logger.info(
                 "User UID: {} already has a partner (partner UID: {}). Cannot accept new invitation.",
@@ -99,7 +99,6 @@ class PartnerInvitationService(
             throw CustomException(ErrorCode.PARTNER_ALREADY_EXISTS)
         }
 
-        // 3. 초대 코드 유효성 검사
         val invitation = partnerInvitationRepository.findByIdAndIsUsedFalseAndExpiresAtAfter(invitationId, now)
             .orElseThrow {
                 logger.warn(
@@ -110,16 +109,13 @@ class PartnerInvitationService(
                 throw CustomException(ErrorCode.INVITATION_NOT_FOUND)
             }
 
-        // 4. 초대를 생성한 사용자(issuerUser) 정보 가져오기
         val issuerUser = invitation.issuerUser
 
-        // 5. 자기 자신의 초대를 수락하는지 확인
         if (accepterUser.uid == issuerUser.uid) {
             logger.warn("User UID: {} attempted to accept their own invitation ID: {}", accepterUserUid, invitationId)
             throw CustomException(ErrorCode.CANNOT_INVITE_SELF)
         }
 
-        // 6. 초대를 생성한 사용자(issuerUser)가 이미 다른 파트너가 있는지 확인 (동시성 문제 고려)
         val currentIssuerUser = userRepository.findById(issuerUser.uid)
             .orElseThrow {
                 logger.error(
@@ -128,7 +124,6 @@ class PartnerInvitationService(
                     invitationId,
                     accepterUserUid
                 )
-                // 초대장을 만든 유저가 사라진 매우 드문 경우
                 throw CustomException(ErrorCode.USER_NOT_FOUND)
             }
 
@@ -143,7 +138,6 @@ class PartnerInvitationService(
             throw CustomException(ErrorCode.INVITATION_ISSUER_HAS_PARTNER)
         }
 
-        // 7. 파트너 관계 설정
         val partnerSinceTime = LocalDateTime.now()
 
         accepterUser.partnerUserUid = issuerUser.uid
@@ -152,20 +146,27 @@ class PartnerInvitationService(
         currentIssuerUser.partnerUserUid = accepterUser.uid
         currentIssuerUser.partnerSince = partnerSinceTime
 
-        // 8. 초대 코드 사용됨으로 상태 변경
         invitation.isUsed = true
         invitation.acceptedByUserUid = accepterUser.uid
         invitation.expiresAt = now
 
-        // 9. 변경사항 저장
         userRepository.save(accepterUser)
         userRepository.save(currentIssuerUser)
         partnerInvitationRepository.save(invitation)
 
+        eventPublisher.publishEvent(
+            PartnerRelationEstablishedEvent(
+                issuerUserId = currentIssuerUser.uid,
+                accepterUserId = accepterUser.uid,
+                accepterNickname = accepterUser.nickname,
+                partnerSince = partnerSinceTime
+            )
+        )
+
         logger.info(
-            "Partner relation established between user UID: {} and user UID: {} via invitation ID: {}",
+            "Partner relation established and event published for issuer {}. Accepter: {}, Invitation ID: {}",
+            currentIssuerUser.uid,
             accepterUserUid,
-            issuerUser.uid,
             invitationId
         )
 
@@ -176,7 +177,6 @@ class PartnerInvitationService(
     fun deleteInvitation(issuerUserUid: String, invitationId: String) {
         logger.info("User UID: {} attempting to delete invitation ID: {}", issuerUserUid, invitationId)
 
-        // 1. 초대장 ID로 초대 정보를 조회합니다.
         val invitation = partnerInvitationRepository.findById(invitationId)
             .orElseThrow {
                 logger.warn(
@@ -187,7 +187,6 @@ class PartnerInvitationService(
                 throw CustomException(ErrorCode.INVITATION_NOT_FOUND)
             }
 
-        // 2. 요청자가 초대장을 생성한 사용자인지 확인합니다.
         if (invitation.issuerUser.uid != issuerUserUid) {
             logger.warn(
                 "User UID: {} attempted to delete invitation ID: {} owned by another user UID: {}",
@@ -198,7 +197,6 @@ class PartnerInvitationService(
             throw CustomException(ErrorCode.FORBIDDEN_INVITATION_ACCESS)
         }
 
-        // 3. 이미 사용된 초대 코드인지 확인합니다.
         if (invitation.isUsed) {
             logger.warn(
                 "User UID: {} attempted to delete an already used invitation ID: {}",
@@ -208,7 +206,6 @@ class PartnerInvitationService(
             throw CustomException(ErrorCode.INVITATION_ALREADY_USED)
         }
 
-        // 4. 모든 검증을 통과하면 초대장을 삭제합니다.
         partnerInvitationRepository.delete(invitation)
         logger.info(
             "Invitation ID: {} deleted successfully by issuer user UID: {}",

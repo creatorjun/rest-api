@@ -2,6 +2,8 @@ package com.company.rest.api.service
 
 import com.company.rest.api.dto.UserAccountUpdateRequestDto
 import com.company.rest.api.entity.User
+import com.company.rest.api.event.PartnerRelationTerminatedEvent
+import com.company.rest.api.event.UserAccountDeletedEvent
 import com.company.rest.api.exception.CustomException
 import com.company.rest.api.exception.ErrorCode
 import com.company.rest.api.repository.AnniversaryRepository
@@ -10,6 +12,7 @@ import com.company.rest.api.repository.EventRepository
 import com.company.rest.api.repository.PartnerInvitationRepository
 import com.company.rest.api.repository.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,7 +24,9 @@ class UserService(
     private val chatMessageRepository: ChatMessageRepository,
     private val eventRepository: EventRepository,
     private val partnerInvitationRepository: PartnerInvitationRepository,
-    private val anniversaryRepository: AnniversaryRepository
+    private val anniversaryRepository: AnniversaryRepository,
+    private val webSocketPresenceService: WebSocketPresenceService,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val logger = LoggerFactory.getLogger(UserService::class.java)
 
@@ -185,6 +190,9 @@ class UserService(
             userRepository.save(partnerUser)
             logger.info("Partner information cleared for former partner UID: {}", partnerUid)
 
+            eventPublisher.publishEvent(PartnerRelationTerminatedEvent(notifiedPartnerId = partnerUid))
+            logger.info("Published PARTNER_RELATION_TERMINATED event for former partner UID: {}", partnerUid)
+
             chatMessageRepository.deleteAllMessagesBetweenUsers(currentUser, partnerUser)
             logger.info(
                 "Chat history between user UID: {} and former partner UID: {} has been deleted.",
@@ -273,6 +281,9 @@ class UserService(
 
         val deletedAllMessagesCount = chatMessageRepository.deleteAllBySenderOrReceiver(user)
         logger.info("Deleted {} total chat messages involving user UID: {}", deletedAllMessagesCount, user.uid)
+
+        val isOnline = webSocketPresenceService.isUserOnline(user.uid)
+        eventPublisher.publishEvent(UserAccountDeletedEvent(user.uid, user.fcmToken, isOnline))
 
         userRepository.delete(user)
         logger.info("User account UID: {} and all associated data deleted successfully.", user.uid)
