@@ -48,6 +48,7 @@ enum class ErrorCode(
     // Chat
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."),
     FORBIDDEN_MESSAGE_ACCESS(HttpStatus.FORBIDDEN, "해당 메시지를 삭제할 권한이 없습니다."),
+    CANNOT_DELETE_READ_MESSAGE(HttpStatus.CONFLICT, "이미 상대방이 읽은 메시지는 삭제할 수 없습니다."),
 
     // Weather
     WEATHER_DATA_NOT_FOUND(HttpStatus.NOT_FOUND, "날씨 정보를 찾을 수 없습니다."),

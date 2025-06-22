@@ -416,14 +416,44 @@ class ChatService(
             throw CustomException(ErrorCode.FORBIDDEN_MESSAGE_ACCESS)
         }
 
+        // --- 여기부터가 수정된 부분입니다 ---
+
+        // 1. 상대방이 이미 읽은 메시지인지 확인합니다.
+        if (message.isRead) {
+            logger.warn("User UID: {} attempted to delete an already read message ID: {}", currentUserUid, messageId)
+            throw CustomException(ErrorCode.CANNOT_DELETE_READ_MESSAGE)
+        }
+
+        // 2. 이미 삭제 처리된 메시지인지 확인합니다.
         if (message.isDeleted) {
             logger.info("deleteMessage: Message ID: {} was already marked as deleted.", messageId)
             return
         }
 
+        message.content = "삭제된 메시지입니다."
         message.isDeleted = true
         message.deletedAt = LocalDateTime.now()
-        chatMessageRepository.save(message)
+
+        val updatedMessageEntity = chatMessageRepository.save(message)
         logger.info("deleteMessage: Message ID: {} marked as deleted by user UID: {}", messageId, currentUserUid)
+
+        val deletedMessageDto = ChatMessageDto(
+            id = updatedMessageEntity.id,
+            type = updatedMessageEntity.type,
+            content = updatedMessageEntity.content,
+            senderUid = updatedMessageEntity.sender.uid,
+            senderNickname = updatedMessageEntity.sender.nickname,
+            receiverUid = updatedMessageEntity.receiver.uid,
+            timestamp = updatedMessageEntity.createdAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+            isRead = updatedMessageEntity.isRead
+        )
+
+        val senderUid = updatedMessageEntity.sender.uid
+        val receiverUid = updatedMessageEntity.receiver.uid
+
+        messagingTemplate.convertAndSendToUser(senderUid, "/queue/private", deletedMessageDto)
+        messagingTemplate.convertAndSendToUser(receiverUid, "/queue/private", deletedMessageDto)
+
+        logger.info("Sent real-time update for deleted message ID: {} to both users: {}, {}", messageId, senderUid, receiverUid)
     }
 }
