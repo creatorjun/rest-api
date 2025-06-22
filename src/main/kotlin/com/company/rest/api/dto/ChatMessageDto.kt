@@ -2,7 +2,7 @@ package com.company.rest.api.dto
 
 // 메시지 유형 정의
 enum class MessageType {
-    CHAT, JOIN, LEAVE, DATE, SCHEDULE
+    CHAT, JOIN, LEAVE, DATE, SCHEDULE, ERROR
 }
 
 data class ChatMessageDto(

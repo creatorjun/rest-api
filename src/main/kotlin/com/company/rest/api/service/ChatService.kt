@@ -173,24 +173,29 @@ class ChatService(
         val sender = senderOptional.get()
         val receiver = receiverOptional.get()
 
-        // --- 여기부터가 새로 추가된 부분입니다 ---
-
         // CHAT 또는 SCHEDULE 타입의 메시지를 보낼 때, 두 사용자가 파트너 관계인지 확인합니다.
         if (chatMessageDto.type == MessageType.CHAT || chatMessageDto.type == MessageType.SCHEDULE) {
             if (sender.partnerUserUid != receiver.uid || receiver.partnerUserUid != sender.uid) {
                 logger.warn(
-                    "Message send attempt between non-partners. Sender: {}, Receiver: {}",
+                    "Message send attempt between non-partners. Sender: {}, Receiver: {}. Sending ERROR feedback.",
                     sender.uid,
                     receiver.uid
                 )
-                // 이 부분은 클라이언트에게 에러를 직접 반환하지는 않지만, 서버에서 처리를 중단합니다.
-                // 만약 클라이언트에게 실패 피드백을 주고 싶다면, 별도의 에러 메시지를 WebSocket으로 보내는 로직이 필요합니다.
-                // 지금은 단순히 메시지 전송을 막는 것으로 처리합니다.
-                return
+                // --- 여기부터가 수정된 부분입니다 ---
+                val errorDto = ChatMessageDto(
+                    type = MessageType.ERROR,
+                    content = "파트너가 아닌 사용자에게는 메시지를 보낼 수 없습니다.",
+                    senderUid = sender.uid,
+                    senderNickname = sender.nickname,
+                    receiverUid = sender.uid, // 에러는 자기 자신에게 보내는 메시지
+                    timestamp = System.currentTimeMillis()
+                )
+                // 메시지 전송을 시도한 사람에게만 실패 피드백을 보냅니다.
+                messagingTemplate.convertAndSendToUser(sender.uid, "/queue/private", errorDto)
+                return // 여기서 로직을 중단합니다.
+                // --- 수정 끝 ---
             }
         }
-
-        // --- 추가 끝 ---
 
         val isReceiverActive = webSocketActivityService.isUserActiveInChat(
             userUid = receiver.uid,

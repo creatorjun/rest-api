@@ -7,9 +7,10 @@ import com.company.rest.api.service.FcmService
 import com.company.rest.api.service.UserService
 import com.company.rest.api.service.WebSocketPresenceService
 import org.slf4j.LoggerFactory
-import org.springframework.context.event.EventListener
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
+import org.springframework.transaction.event.TransactionPhase
+import org.springframework.transaction.event.TransactionalEventListener
 
 @Component
 class NotificationEventListener(
@@ -21,7 +22,7 @@ class NotificationEventListener(
 ) {
     private val logger = LoggerFactory.getLogger(NotificationEventListener::class.java)
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun handleFcmTokenInvalidatedEvent(event: FcmTokenInvalidatedEvent) {
         logger.info("Handling FcmTokenInvalidatedEvent for token: {}...", event.fcmToken.take(10))
         try {
@@ -35,7 +36,7 @@ class NotificationEventListener(
         }
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun handleUserAccountDeletedEvent(event: UserAccountDeletedEvent) {
         val message = "회원 탈퇴가 정상적으로 처리되었습니다. 이용해주셔서 감사합니다."
         if (event.isOnline) {
@@ -59,7 +60,7 @@ class NotificationEventListener(
         }
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun handlePartnerRelationTerminatedEvent(event: PartnerRelationTerminatedEvent) {
         val notificationDto = SystemNotificationDto(
             type = SystemNotificationType.PARTNER_RELATION_TERMINATED,
@@ -69,7 +70,7 @@ class NotificationEventListener(
         logger.info("Sent PARTNER_RELATION_TERMINATED notification to former partner UID: {}", event.notifiedPartnerId)
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun handlePartnerRelationEstablishedEvent(event: PartnerRelationEstablishedEvent) {
         val message = "${event.accepterNickname ?: "상대방"}님이 파트너 초대를 수락했습니다!"
         val dataPayload = mapOf(
