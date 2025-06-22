@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Date
 
 @Service
 class AuthService(
@@ -74,11 +76,32 @@ class AuthService(
             return Mono.error(CustomException(ErrorCode.REFRESH_TOKEN_EXPIRED))
         }
 
+        // --- 여기부터가 수정된 부분입니다 ---
+
+        // 1. 새로운 Access Token 발급
         val newAccessToken = jwtTokenProvider.generateAccessToken(
             userUid = user.uid,
             userSocialId = user.providerId,
             provider = user.loginProvider.name
         )
+
+        // 2. 새로운 Refresh Token 발급
+        val newRefreshToken = jwtTokenProvider.generateRefreshToken(
+            userUid = user.uid
+        )
+
+        // 3. DB에 새로운 Refresh Token과 만료 시간을 저장하여 이전 토큰을 무효화
+        user.refreshToken = newRefreshToken
+        val refreshTokenExpiry = LocalDateTime.ofInstant(
+            Date(System.currentTimeMillis() + jwtRefreshExpirationMs).toInstant(),
+            ZoneId.systemDefault()
+        )
+        user.refreshTokenExpiryDate = refreshTokenExpiry
+        userRepository.save(user)
+
+        logger.info("New Access & Refresh Tokens issued for user UID: {}", user.uid)
+
+        // --- 수정 끝 ---
 
         var partnerNickname: String? = null
         user.partnerUserUid?.let { pUid ->
@@ -92,14 +115,9 @@ class AuthService(
             }
         }
 
-        logger.info(
-            "New Access Token issued for user UID: {}. AppPasswordIsSet: {}. PartnerUID: {}, PartnerNickname: {}",
-            user.uid, user.appPasswordIsSet, user.partnerUserUid ?: "N/A", partnerNickname ?: "N/A"
-        )
-
         val authResponse = AuthResponseDto(
             accessToken = newAccessToken,
-            refreshToken = providedRefreshToken,
+            refreshToken = newRefreshToken, // 응답에 새로운 Refresh Token을 담아 전달
             isNew = false,
             uid = user.uid,
             nickname = user.nickname,
