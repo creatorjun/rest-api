@@ -173,6 +173,25 @@ class ChatService(
         val sender = senderOptional.get()
         val receiver = receiverOptional.get()
 
+        // --- 여기부터가 새로 추가된 부분입니다 ---
+
+        // CHAT 또는 SCHEDULE 타입의 메시지를 보낼 때, 두 사용자가 파트너 관계인지 확인합니다.
+        if (chatMessageDto.type == MessageType.CHAT || chatMessageDto.type == MessageType.SCHEDULE) {
+            if (sender.partnerUserUid != receiver.uid || receiver.partnerUserUid != sender.uid) {
+                logger.warn(
+                    "Message send attempt between non-partners. Sender: {}, Receiver: {}",
+                    sender.uid,
+                    receiver.uid
+                )
+                // 이 부분은 클라이언트에게 에러를 직접 반환하지는 않지만, 서버에서 처리를 중단합니다.
+                // 만약 클라이언트에게 실패 피드백을 주고 싶다면, 별도의 에러 메시지를 WebSocket으로 보내는 로직이 필요합니다.
+                // 지금은 단순히 메시지 전송을 막는 것으로 처리합니다.
+                return
+            }
+        }
+
+        // --- 추가 끝 ---
+
         val isReceiverActive = webSocketActivityService.isUserActiveInChat(
             userUid = receiver.uid,
             partnerUid = sender.uid
@@ -416,15 +435,11 @@ class ChatService(
             throw CustomException(ErrorCode.FORBIDDEN_MESSAGE_ACCESS)
         }
 
-        // --- 여기부터가 수정된 부분입니다 ---
-
-        // 1. 상대방이 이미 읽은 메시지인지 확인합니다.
         if (message.isRead) {
             logger.warn("User UID: {} attempted to delete an already read message ID: {}", currentUserUid, messageId)
             throw CustomException(ErrorCode.CANNOT_DELETE_READ_MESSAGE)
         }
 
-        // 2. 이미 삭제 처리된 메시지인지 확인합니다.
         if (message.isDeleted) {
             logger.info("deleteMessage: Message ID: {} was already marked as deleted.", messageId)
             return
