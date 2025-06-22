@@ -1,6 +1,7 @@
 package com.company.rest.api.scheduler
 
 import com.company.rest.api.service.WeatherService
+import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -12,6 +13,22 @@ class WeatherScheduler(
     private val weatherService: WeatherService
 ) {
     private val logger = LoggerFactory.getLogger(WeatherScheduler::class.java)
+
+    /**
+     * 애플리케이션 시작 시 모든 날씨 정보를 한 번 가져옵니다.
+     */
+    @PostConstruct
+    fun initWeatherFetch() {
+        logger.info("Initial weather data synchronization starting on application startup...")
+        try {
+            weatherService.fetchAndStoreCurrentWeather()
+            weatherService.fetchAndStoreHourlyForecasts()
+            weatherService.fetchAndStoreDailyForecasts()
+            logger.info("Initial weather data synchronization finished successfully.")
+        } catch (e: Exception) {
+            logger.error("Failed to sync weather data on application startup.", e)
+        }
+    }
 
     /**
      * 매 5분마다 실행되어 현재 날씨 정보를 업데이트합니다.

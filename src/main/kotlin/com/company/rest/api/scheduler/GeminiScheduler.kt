@@ -1,6 +1,7 @@
 package com.company.rest.api.scheduler
 
 import com.company.rest.api.service.GeminiService
+import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -14,14 +15,30 @@ class GeminiScheduler( // 클래스 이름은 유지 (Gemini 관련 스케줄러
     private val geminiService: GeminiService
 ) {
     private val logger = LoggerFactory.getLogger(GeminiScheduler::class.java)
+    private val KOREA_ZONE_ID = ZoneId.of("Asia/Seoul")
+
+    /**
+     * 애플리케이션 시작 시 오늘의 띠별 운세를 한 번 가져옵니다.
+     */
+    @PostConstruct
+    fun initDailyLuckFetch() {
+        val today = LocalDate.now(KOREA_ZONE_ID)
+        logger.info("Initial daily luck data synchronization starting for date: {} on application startup...", today)
+        try {
+            geminiService.fetchAndStoreDailyLuck(today)
+            logger.info("Initial daily luck data synchronization finished successfully.")
+        } catch (e: Exception) {
+            logger.error("Failed to sync daily luck data on application startup.", e)
+        }
+    }
 
     /**
      * 매일 오전 9시에 실행되어 오늘의 띠별 운세(행운)를 제미나이로부터 가져와 DB에 저장합니다. (한국 시간 기준)
      */
     @Scheduled(cron = "0 0 0 * * ?", zone = "Asia/Seoul") // 매일 자정
     fun fetchDailyLuckTask() { // 메소드명 변경
-        val currentTime = LocalDateTime.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+        val currentTime = LocalDateTime.now(KOREA_ZONE_ID).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val today = LocalDate.now(KOREA_ZONE_ID)
 
         logger.info(
             "Executing scheduled task: fetchDailyLuckTask for date {} at {} (Korea Time)",
