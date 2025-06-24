@@ -1,7 +1,5 @@
 package com.company.rest.api.security
 
-// import org.springframework.security.core.userdetails.User // UserDetails 직접 사용 안 함
-// import org.springframework.security.core.userdetails.UserDetails // UserDetails 직접 사용 안 함
 import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
@@ -29,48 +27,40 @@ class JwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        filterLogger.debug("JwtAuthenticationFilter: Intercepting request for URI: {}", request.requestURI)
         try {
             val jwt = getJwtFromRequest(request)
 
             if (jwt != null && jwtTokenProvider.validateToken(jwt)) {
-                filterLogger.debug("JwtAuthenticationFilter: JWT is valid.")
+                filterLogger.debug("JwtAuthenticationFilter: JWT is valid for URI: {}", request.requestURI)
                 val userUid = jwtTokenProvider.getUserUidFromToken(jwt)
 
                 if (userUid != null) {
-                    filterLogger.debug("JwtAuthenticationFilter: User UID '{}' extracted from JWT.", userUid)
                     if (SecurityContextHolder.getContext().authentication == null) {
-                        // Principal을 userUid (String) 자체로 설정
-                        // 필요하다면 여기서 DB를 조회하여 사용자의 실제 권한(role)을 가져와 GrantedAuthority 리스트를 만들 수 있음
-                        // 예시: val authorities = listOf(SimpleGrantedAuthority("ROLE_USER"))
-                        val authorities = emptyList<SimpleGrantedAuthority>() // 현재는 권한 없음
-
+                        val authorities = emptyList<SimpleGrantedAuthority>()
                         val authentication = UsernamePasswordAuthenticationToken(
-                            userUid,     // Principal을 String (userUid)으로 직접 설정
-                            null,        // Credentials
-                            authorities  // 권한 목록
+                            userUid,
+                            null,
+                            authorities
                         )
                         authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
                         SecurityContextHolder.getContext().authentication = authentication
                         filterLogger.info(
-                            "JwtAuthenticationFilter: Successfully authenticated user UID '{}' (as String principal) and set SecurityContext.",
+                            "JwtAuthenticationFilter: Successfully authenticated user UID '{}' and set SecurityContext.",
                             userUid
-                        )
-                    } else {
-                        filterLogger.debug(
-                            "JwtAuthenticationFilter: SecurityContextHolder already contains an authentication object for user '{}'. Skipping.",
-                            SecurityContextHolder.getContext().authentication.name
                         )
                     }
                 } else {
                     filterLogger.warn("JwtAuthenticationFilter: User UID could not be extracted from JWT, although token was considered valid.")
                 }
             } else {
-                if (jwt == null) {
-                    filterLogger.debug("JwtAuthenticationFilter: No JWT token found in request header 'Authorization'.")
-                } else {
-                    filterLogger.warn("JwtAuthenticationFilter: JWT token validation failed.")
+                // --- 여기부터가 수정된 부분입니다 ---
+                // 토큰이 헤더에 존재하지만 유효하지 않은 경우 (만료, 손상 등)
+                if (jwt != null) {
+                    // 요청에 'token_error'라는 표식을 남깁니다.
+                    request.setAttribute("token_error", true)
+                    filterLogger.warn("JwtAuthenticationFilter: Invalid JWT token found. Marking request with 'token_error' attribute.")
                 }
+                // --- 수정 끝 ---
             }
         } catch (ex: Exception) {
             filterLogger.error("JwtAuthenticationFilter: Could not set user authentication in security context", ex)
@@ -82,10 +72,8 @@ class JwtAuthenticationFilter(
     private fun getJwtFromRequest(request: HttpServletRequest): String? {
         val bearerToken = request.getHeader("Authorization")
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            filterLogger.debug("JwtAuthenticationFilter: 'Authorization' header found with Bearer token.")
             return bearerToken.substring(7)
         }
-        filterLogger.debug("JwtAuthenticationFilter: No 'Authorization' header or not a Bearer token.")
         return null
     }
 }

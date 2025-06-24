@@ -11,6 +11,8 @@ import com.company.rest.api.repository.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
+import java.time.YearMonth
 import java.util.stream.Collectors
 
 @Service
@@ -45,18 +47,48 @@ class EventService(
     }
 
     @Transactional(readOnly = true)
-    fun getEventsForUser(userUid: String): List<EventResponseDto> {
-        logger.info("Fetching events for user UID: $userUid")
+    fun getInitialEvents(userUid: String): List<EventResponseDto> {
+        logger.info("Fetching initial events for user UID: $userUid (today +/- 1 month)")
         if (!userRepository.existsById(userUid)) {
             logger.warn("Attempted to fetch events for non-existent user UID: $userUid")
             return emptyList()
         }
 
-        val events = eventRepository.findByUserUidOrderByCreatedAtDesc(userUid)
+        val today = LocalDate.now()
+        val startDate = today.minusMonths(1).withDayOfMonth(1)
+        val endDate = today.plusMonths(1).withDayOfMonth(today.plusMonths(1).lengthOfMonth())
+
+        val events = eventRepository.findByUserUidAndEventDateBetweenOrderByEventDateAscDisplayOrderAsc(
+            userUid,
+            startDate,
+            endDate
+        )
         return events.stream()
             .map(EventResponseDto::fromEntity)
             .collect(Collectors.toList())
     }
+
+    @Transactional(readOnly = true)
+    fun getEventsByMonth(userUid: String, year: Int, month: Int): List<EventResponseDto> {
+        logger.info("Fetching events for user UID: $userUid for year: $year, month: $month")
+        if (!userRepository.existsById(userUid)) {
+            logger.warn("Attempted to fetch events for non-existent user UID: $userUid")
+            return emptyList()
+        }
+
+        val startDate = LocalDate.of(year, month, 1)
+        val endDate = YearMonth.of(year, month).atEndOfMonth()
+
+        val events = eventRepository.findByUserUidAndEventDateBetweenOrderByEventDateAscDisplayOrderAsc(
+            userUid,
+            startDate,
+            endDate
+        )
+        return events.stream()
+            .map(EventResponseDto::fromEntity)
+            .collect(Collectors.toList())
+    }
+
 
     @Transactional
     fun updateEvent(userUid: String, requestDto: EventUpdateRequestDto): EventResponseDto {

@@ -62,8 +62,8 @@ class EventController(
     }
 
     @Operation(
-        summary = "내 이벤트 목록 조회",
-        description = "인증된 사용자의 모든 이벤트 목록을 조회합니다. 생성일자 기준 내림차순으로 정렬됩니다.",
+        summary = "초기 이벤트 목록 조회 (오늘 기준 전후 1개월)",
+        description = "앱의 초기 로딩 시 사용됩니다. 오늘 날짜를 기준으로 지난달 1일부터 다음 달 말일까지의 이벤트 목록을 조회합니다.",
         parameters = [
             Parameter(
                 name = "Authorization",
@@ -83,10 +83,41 @@ class EventController(
     )
     @ApiResponse(responseCode = "401", description = "인증 실패")
     @GetMapping
-    fun getMyEvents(
+    fun getInitialEvents(
         @Parameter(hidden = true) @UserId userUid: String
     ): ResponseEntity<List<EventResponseDto>> {
-        val events = eventService.getEventsForUser(userUid)
+        val events = eventService.getInitialEvents(userUid)
+        return ResponseEntity.ok(events)
+    }
+
+    @Operation(
+        summary = "월별 이벤트 목록 조회",
+        description = "사용자가 캘린더를 스와이프할 때 특정 연도와 월에 해당하는 이벤트 목록을 조회합니다.",
+        parameters = [
+            Parameter(
+                name = "Authorization",
+                `in` = ParameterIn.HEADER,
+                description = "Bearer {Access Token}",
+                required = true,
+                schema = Schema(type = "string")
+            )
+        ]
+    )
+    @ApiResponse(
+        responseCode = "200", description = "월별 이벤트 목록 조회 성공",
+        content = [Content(
+            mediaType = "application/json",
+            array = ArraySchema(schema = Schema(implementation = EventResponseDto::class))
+        )]
+    )
+    @ApiResponse(responseCode = "401", description = "인증 실패")
+    @GetMapping("/by-month")
+    fun getEventsByMonth(
+        @Parameter(hidden = true) @UserId userUid: String,
+        @Parameter(description = "조회할 연도", required = true, example = "2025") @RequestParam("year") year: Int,
+        @Parameter(description = "조회할 월", required = true, example = "6") @RequestParam("month") month: Int
+    ): ResponseEntity<List<EventResponseDto>> {
+        val events = eventService.getEventsByMonth(userUid, year, month)
         return ResponseEntity.ok(events)
     }
 

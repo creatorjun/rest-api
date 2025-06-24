@@ -1,5 +1,6 @@
 package com.company.rest.api.config
 
+import com.company.rest.api.security.CustomAuthenticationEntryPoint
 import com.company.rest.api.security.JwtAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -14,7 +15,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
-    private val jwtAuthenticationFilter: JwtAuthenticationFilter
+    private val jwtAuthenticationFilter: JwtAuthenticationFilter,
+    private val customAuthenticationEntryPoint: CustomAuthenticationEntryPoint // 새로 추가된 의존성 주입
 ) {
 
     @Bean
@@ -34,9 +36,12 @@ class SecurityConfig(
                         "/api/v1/auth/**",
                         "/ws/**",
                         "/api/v1/admin/**",
-                        "/favicon.ico" // 이 부분을 추가합니다.
+                        "/favicon.ico"
                     ).permitAll()
                     .anyRequest().authenticated()
+            }
+            .exceptionHandling { handling ->
+                handling.authenticationEntryPoint(customAuthenticationEntryPoint)
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 
