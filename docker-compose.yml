@@ -1,0 +1,47 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: rest-api-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./docker/mariadb/init:/docker-entrypoint-initdb.d
+    networks:
+      - rest-api-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rest-api-app
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - ./config:/config:ro
+      - ./secrets:/secrets:ro
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      - TZ=Asia/Seoul
+    networks:
+      - rest-api-net
+
+volumes:
+  mariadb_data:
+
+networks:
+  rest-api-net:
+    driver: bridge
